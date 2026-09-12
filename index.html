@@ -603,15 +603,79 @@ function kingsFacing(bd){
     return true;
 }
 
-function isInCheck(bd,side){
+function kingSq(bd,side){
     const kp=side==='red'?KING:-KING;
-    let kr=-1,kc=-1;
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)
-        if(bd[r][c]===kp){kr=r;kc=c}
-    if(kr===-1)return true;
-    const opp=side==='red'?'black':'red';
-    const om=genPseudo(bd,opp);
-    for(const m of om)if(m.toR===kr&&m.toC===kc)return true;
+        if(bd[r][c]===kp)return{r,c};
+    return null;
+}
+
+/* 快速：仅判断 k 位是否被 byRed 攻击 */
+function attacked(bd,kr,kc,byRed){
+    // 车/炮
+    for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]){
+        let r=kr+dr,c=kc+dc,scr=0;
+        while(inB(r,c)){
+            const p=bd[r][c];
+            if(p!==0){
+                const t=Math.abs(p),isR=p>0;
+                if(isR===byRed){
+                    if(t===ROOK&&scr===0)return true;
+                    if(t===CANNON&&scr===1)return true;
+                }
+                scr++;
+                if(scr>1)break;
+            }
+            r+=dr;c+=dc;
+        }
+    }
+    // 马
+    const km=[[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],
+               [-1,-2,0,-1],[-1,2,0,1],[1,-2,0,-1],[1,2,0,1]];
+    for(const[dr,dc,br,bc]of km){
+        const r=kr+dr,c=kc+dc;
+        if(!inB(r,c))continue;
+        if(bd[r+br]&&bd[r+br][c+bc]!==0)continue;
+        const p=bd[r][c];
+        if(p!==0&&Math.abs(p)===KNIGHT&&(p>0)===byRed)return true;
+    }
+    // 兵
+    if(byRed){
+        if(kr+1<=9&&bd[kr+1][kc]===PAWN)return true;
+        if(kr<=4){
+            if(kc-1>=0&&bd[kr][kc-1]===PAWN)return true;
+            if(kc+1<=8&&bd[kr][kc+1]===PAWN)return true;
+        }
+    }else{
+        if(kr-1>=0&&bd[kr-1][kc]===-PAWN)return true;
+        if(kr>=5){
+            if(kc-1>=0&&bd[kr][kc-1]===-PAWN)return true;
+            if(kc+1<=8&&bd[kr][kc+1]===-PAWN)return true;
+        }
+    }
+    // 将/仕
+    for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]){
+        const r=kr+dr,c=kc+dc;
+        if(!inB(r,c))continue;
+        const p=bd[r][c];
+        if(p===0)continue;
+        if(byRed&&p===KING&&inPal(kr,kc,false)&&inPal(r,c,true))return true;
+        if(!byRed&&p===-KING&&inPal(kr,kc,true)&&inPal(r,c,false))return true;
+    }
+    for(const[dr,dc]of[[1,1],[1,-1],[-1,1],[-1,-1]]){
+        const r=kr+dr,c=kc+dc;
+        if(!inB(r,c))continue;
+        const p=bd[r][c];
+        if(byRed&&p===ADVISOR&&inPal(kr,kc,false))return true;
+        if(!byRed&&p===-ADVISOR&&inPal(kr,kc,true))return true;
+    }
+    return false;
+}
+
+function isInCheck(bd,side){
+    const k=kingSq(bd,side);
+    if(!k)return true;
+    if(attacked(bd,k.r,k.c,side==='red'?false:true))return true;
     if(kingsFacing(bd))return true;
     return false;
 }
@@ -636,8 +700,10 @@ function getLegal(bd,side,banFrom){
 }
 
 /* =========================================================
-   AI ENGINE
-   权重：子力 + 位置 + 过河兵 + 进攻压迫 + 仕相防守 + 王安全 + 悬空子
+   AI ENGINE（加强版）
+   - 置换表 + 杀手着法 + 历史启发
+   - 迭代加深 α-β + 静止搜索 + 将军延伸（有上限）
+   - 评估：子力/位置/过河兵/进攻/防守/王安全/悬空（加速）
    ========================================================= */
 function pawnVal(side,r){
     if(side==='red'){
@@ -652,58 +718,7 @@ function pawnVal(side,r){
 
 function pieceStatic(t,isR,r,c){
     const pst=PST[t];if(!pst)return 0;
-    const pr=isR?r:(9-r);
-    return pst[pr][c]||0;
-}
-
-function countAttack(bd,tr,tc,byRed){
-    let n=0;
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-        const p=bd[r][c];if(p===0)continue;
-        if(r===tr&&c===tc)continue;
-        const isR=p>0;
-        if(isR!==byRed)continue;
-        const t=Math.abs(p);
-        if(t===ROOK||t===CANNON){
-            const dr=Math.sign(tr-r),dc=Math.sign(tc-c);
-            if(!(dr===0||dc===0))continue;
-            let nr=r+dr,nc=c+dc,scr=0;
-            while(inB(nr,nc)){
-                if(nr===tr&&nc===tc){
-                    if(t===ROOK&&scr===0)n++;
-                    if(t===CANNON&&scr===1)n++;
-                    break;
-                }
-                if(bd[nr][nc]!==0)scr++;
-                if(scr>1)break;
-                nr+=dr;nc+=dc;
-            }
-        }else if(t===KNIGHT){
-            const km=[[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],
-                       [-1,-2,0,-1],[-1,2,0,1],[1,-2,0,-1],[1,2,0,1]];
-            for(const[dr,dc,br,bc]of km){
-                if(r+dr===tr&&c+dc===tc&&bd[r+br][c+bc]===0){n++;break}
-            }
-        }else if(t===PAWN){
-            const fwd=isR?-1:1;
-            if(c===tc&&r+fwd===tr)n++;
-            else if(r===tr&&Math.abs(c-tc)===1){
-                const crossed=isR?(r<=4):(r>=5);
-                if(crossed)n++;
-            }
-        }else if(t===KING){
-            if(inPal(tr,tc,isR)&&Math.abs(r-tr)+Math.abs(c-tc)===1)n++;
-        }else if(t===ADVISOR){
-            if(inPal(tr,tc,isR)&&Math.abs(r-tr)===1&&Math.abs(c-tc)===1)n++;
-        }else if(t===BISHOP){
-            if(Math.abs(r-tr)===2&&Math.abs(c-tc)===2){
-                if(isR&&tr<5)continue;
-                if(!isR&&tr>4)continue;
-                if(bd[(r+tr)/2][(c+tc)/2]===0)n++;
-            }
-        }
-    }
-    return n;
+    return pst[isR?r:(9-r)][c]||0;
 }
 
 function evaluate(bd){
@@ -722,178 +737,234 @@ function evaluate(bd){
         if(isR){
             sc+=v;
             if(t===ROOK){redR++;redH.push({r,c,t})}
-            if(t===CANNON){redC++;redH.push({r,c,t})}
-            if(t===KNIGHT){redN++;redH.push({r,c,t})}
-            if(t===PAWN&&r<=4)redAdv++;
-            if(t===ADVISOR)redA++;
-            if(t===BISHOP)redB++;
+            else if(t===CANNON){redC++;redH.push({r,c,t})}
+            else if(t===KNIGHT){redN++;redH.push({r,c,t})}
+            else if(t===PAWN&&r<=4)redAdv++;
+            else if(t===ADVISOR)redA++;
+            else if(t===BISHOP)redB++;
         }else{
             sc-=v;
             if(t===ROOK){blackR++;blackH.push({r,c,t})}
-            if(t===CANNON){blackC++;blackH.push({r,c,t})}
-            if(t===KNIGHT){blackN++;blackH.push({r,c,t})}
-            if(t===PAWN&&r>=5)blackAdv++;
-            if(t===ADVISOR)blackA++;
-            if(t===BISHOP)blackB++;
+            else if(t===CANNON){blackC++;blackH.push({r,c,t})}
+            else if(t===KNIGHT){blackN++;blackH.push({r,c,t})}
+            else if(t===PAWN&&r>=5)blackAdv++;
+            else if(t===ADVISOR)blackA++;
+            else if(t===BISHOP)blackB++;
         }
     }
     if(!rk)return -999999;
     if(!bk)return 999999;
 
     function atkBonus(sideRed,heavies,adv,n){
-        let s=0;
-        const kr=sideRed?1:8,kc=4;
+        let s=adv*24+n*4;
+        const kr=sideRed?1:8;
         for(const h of heavies){
-            const dist=Math.abs(h.r-kr)+Math.abs(h.c-kc);
-            s+=Math.max(0,8-dist)*4;
+            s+=Math.max(0,8-(Math.abs(h.r-kr)+Math.abs(h.c-4)))*5;
             if(h.t===ROOK){
-                if(h.c===3||h.c===5)s+=12;
+                if(h.c===3||h.c===5)s+=18;
+                if(h.c===4)s+=14;
+                if(sideRed&&h.r<=2)s+=22;
+                if(!sideRed&&h.r>=7)s+=22;
+            }else if(h.t===CANNON){
                 if(h.c===4)s+=10;
-                if(sideRed&&h.r<=2)s+=16;
-                if(!sideRed&&h.r>=7)s+=16;
-            }
-            if(h.t===CANNON){
-                if(h.c===4)s+=8;
-                if(sideRed&&h.r<=4)s+=10;
-                if(!sideRed&&h.r>=5)s+=10;
-            }
-            if(h.t===KNIGHT){
-                if(sideRed&&h.r<=4)s+=14;
-                if(!sideRed&&h.r>=5)s+=14;
-                if(sideRed&&h.r<=2&&(h.c<=1||h.c>=7||h.c===3||h.c===5))s+=18;
-                if(!sideRed&&h.r>=7&&(h.c<=1||h.c>=7||h.c===3||h.c===5))s+=18;
+                if(sideRed&&h.r<=4)s+=12;
+                if(!sideRed&&h.r>=5)s+=12;
+            }else if(h.t===KNIGHT){
+                if(sideRed&&h.r<=4)s+=16;
+                if(!sideRed&&h.r>=5)s+=16;
+                if(sideRed&&h.r<=2&&(h.c<=1||h.c>=7||h.c===3||h.c===5))s+=22;
+                if(!sideRed&&h.r>=7&&(h.c<=1||h.c>=7||h.c===3||h.c===5))s+=22;
             }
         }
-        return s+adv*22+n*3;
+        return s;
     }
     sc+=atkBonus(true,redH,redAdv,redR+redC+redN);
     sc-=atkBonus(false,blackH,blackAdv,blackR+blackC+blackN);
 
     function defBonus(a,b){
-        let s=(a===2?35:a*12)+(b===2?28:b*10);
-        if(a<2)s-=(2-a)*20;
-        if(b<2)s-=(2-b)*16;
+        let s=(a===2?40:a*12)+(b===2?32:b*10);
+        if(a<2)s-=(2-a)*24;
+        if(b<2)s-=(2-b)*18;
         return s;
     }
     sc+=defBonus(redA,redB);
     sc-=defBonus(blackA,blackB);
 
-    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-        if(bd[r][c]===KING){
-            const atk=countAttack(bd,r,c,false);
-            sc-=atk*atk*45+atk*30;
-            if(redA===0)sc-=40;
-        }
-        if(bd[r][c]===-KING){
-            const atk=countAttack(bd,r,c,true);
-            sc+=atk*atk*45+atk*30;
-            if(blackA===0)sc+=40;
-        }
+    // 王安全：只对王做一次 attacked
+    const rkPos=kingSq(bd,'red'), bkPos=kingSq(bd,'black');
+    if(rkPos){
+        let atk=0;
+        if(attacked(bd,rkPos.r,rkPos.c,false))atk=1;
+        // 额外：中路暴露
+        if(redA===0)sc-=50;
+        sc-=atk*120;
+    }
+    if(bkPos){
+        let atk=0;
+        if(attacked(bd,bkPos.r,bkPos.c,true))atk=1;
+        if(blackA===0)sc+=50;
+        sc+=atk*120;
     }
 
-    function hanging(sideRed){
+    // 悬空子：只检查车炮马（贵子），少做 countAttack
+    function hangingFast(sideRed){
         let pen=0;
         for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
             const p=bd[r][c];if(p===0)continue;
             const isR=p>0;if(isR!==sideRed)continue;
             const t=Math.abs(p);
-            if(t===KING||t===ADVISOR)continue;
-            const atk=countAttack(bd,r,c,!sideRed);
-            if(atk===0)continue;
-            const def=countAttack(bd,r,c,sideRed);
-            const pv=t===PAWN?pawnVal(sideRed?'red':'black',r):PVAL[t];
-            if(def===0)pen+=pv*0.85+(t===ROOK?80:0)+((t===KNIGHT||t===CANNON)?40:0);
-            else if(def<atk)pen+=pv*0.35;
+            if(t!==ROOK&&t!==CANNON&&t!==KNIGHT)continue;
+            if(!attacked(bd,r,c,!sideRed))continue;
+            if(!attacked(bd,r,c,sideRed)){
+                pen+=PVAL[t]*0.75+(t===ROOK?90:0);
+            }
         }
         return pen;
     }
-    sc-=hanging(true);
-    sc+=hanging(false);
-
+    sc-=hangingFast(true);
+    sc+=hangingFast(false);
     return sc;
 }
 
-function orderMv(bd,mvs){
-    return mvs.slice().sort((a,b)=>{
-        const va=bd[a.toR][a.toC]!==0?PVAL[Math.abs(bd[a.toR][a.toC])]:0;
-        const vb=bd[b.toR][b.toC]!==0?PVAL[Math.abs(bd[b.toR][b.toC])]:0;
-        const av=PVAL[Math.abs(bd[a.fromR][a.fromC])]||1;
-        const bv=PVAL[Math.abs(bd[b.fromR][b.fromC])]||1;
-        return (vb*10-bv)-(va*10-av);
-    });
+/* ---- 置换表 / 杀手 / 历史 ---- */
+const TT=new Map();
+const killers=Array.from({length:64},()=>[null,null]);
+const histHeur=Array.from({length:10},()=>Array.from({length:9},()=>Array.from({length:10},()=>Array(9).fill(0))));
+
+function moveKey(m){return m.fromR*1000+m.fromC*100+m.toR*10+m.toC}
+function posKey(bd,sideRed){
+    let h=sideRed?1:0;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)h=(h*31+bd[r][c]+8)|0;
+    return h;
+}
+
+function scoreMove(bd,m,ply,ttMv){
+    const cap=bd[m.toR][m.toC];
+    let s=0;
+    if(ttMv&&ttMv.fromR===m.fromR&&ttMv.fromC===m.fromC&&ttMv.toR===m.toR&&ttMv.toC===m.toC)s+=1e7;
+    if(cap!==0)s+=1e6+(PVAL[Math.abs(cap)]||0)*10-(PVAL[Math.abs(bd[m.fromR][m.fromC])]||0);
+    const k0=killers[ply]&&killers[ply][0],k1=killers[ply]&&killers[ply][1];
+    if(k0&&k0.fromR===m.fromR&&k0.fromC===m.fromC&&k0.toR===m.toR&&k0.toC===m.toC)s+=9e5;
+    if(k1&&k1.fromR===m.fromR&&k1.fromC===m.fromC&&k1.toR===m.toR&&k1.toC===m.toC)s+=8e5;
+    s+=histHeur[m.fromR][m.fromC][m.toR][m.toC];
+    return s;
+}
+
+function orderMv(bd,mvs,ply,ttMv){
+    const arr=mvs.map(m=>({m,s:scoreMove(bd,m,ply,ttMv)}));
+    arr.sort((a,b)=>b.s-a.s);
+    return arr.map(x=>x.m);
 }
 
 const INF=1e9;
+const MATE=1e6;
 
 function quiescence(bd,sideRed,alpha,beta,t0,budget){
-    if(performance.now()-t0>budget)return evaluate(bd);
-    let stand=evaluate(bd);
-    if(!sideRed)stand=-stand;
-    if(sideRed){
-        if(stand>=beta)return stand;
-        if(stand>alpha)alpha=stand;
-    }else{
-        if(stand<=alpha)return stand;
-        if(stand<beta)beta=stand;
-    }
-    const caps=genPseudo(bd,sideRed?'red':'black').filter(m=>bd[m.toR][m.toC]!==0);
+    if(performance.now()-t0>budget)return evaluate(bd)*(sideRed?1:-1);
+    let stand=evaluate(bd)*(sideRed?1:-1);
+    if(stand>=beta)return stand;
+    if(stand>alpha)alpha=stand;
+    const side=sideRed?'red':'black';
+    const caps=genPseudo(bd,side).filter(m=>bd[m.toR][m.toC]!==0);
     caps.sort((a,b)=>(PVAL[Math.abs(bd[b.toR][b.toC])]||0)-(PVAL[Math.abs(bd[a.toR][a.toC])]||0));
-    for(const m of caps.slice(0,12)){
+    for(const m of caps.slice(0,16)){
         const cap=bd[m.toR][m.toC];
         bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
         let sc;
-        if(!isInCheck(bd,sideRed?'red':'black'))sc=-quiescence(bd,!sideRed,-beta,-alpha,t0,budget);
-        else sc=sideRed?-INF:INF;
+        if(!isInCheck(bd,side))sc=-quiescence(bd,!sideRed,-beta,-alpha,t0,budget);
+        else sc=-INF;
         bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
-        if(sideRed){
-            if(sc>alpha)alpha=sc;
-            if(alpha>=beta)return alpha;
-        }else{
-            if(sc<beta)beta=sc;
-            if(beta<=alpha)return beta;
-        }
+        if(sc>alpha)alpha=sc;
+        if(alpha>=beta)return beta;
         if(performance.now()-t0>budget)break;
     }
-    return sideRed?alpha:beta;
+    return alpha;
 }
 
-function negamax(bd,depth,alpha,beta,sideRed,banFrom,t0,budget,ply){
-    if(performance.now()-t0>budget)return evaluate(bd)*(sideRed?1:-1);
-    if(depth<=0)return quiescence(bd,sideRed,alpha,beta,t0,budget);
+function negamax(bd,depth,alpha,beta,sideRed,banFrom,t0,budget,ply,extLeft){
+    if(ply>0&&performance.now()-t0>budget)return evaluate(bd)*(sideRed?1:-1);
+    const inChk=isInCheck(bd,sideRed?'red':'black');
+    if(depth<=0&&!inChk)return quiescence(bd,sideRed,alpha,beta,t0,budget);
+    if(depth<=0)depth=1; // 被将军时至少再搜一层
+
+    const key=posKey(bd,sideRed);
+    const tt=TT.get(key);
+    let ttMv=null;
+    if(tt){
+        ttMv=tt.mv;
+        if(tt.depth>=depth&&ply>0){
+            if(tt.flag===0)return tt.score;
+            if(tt.flag===1&&tt.score<=alpha)return tt.score;
+            if(tt.flag===2&&tt.score>=beta)return tt.score;
+        }
+    }
+
     const side=sideRed?'red':'black';
-    const mvs=orderMv(bd,getLegal(bd,side,banFrom));
+    const mvs=orderMv(bd,getLegal(bd,side,banFrom),ply,ttMv);
     if(mvs.length===0){
-        if(isInCheck(bd,side))return -INF+ply;
+        if(inChk)return -MATE+ply;
         return 0;
     }
-    let best=-INF;
-    for(const m of mvs){
+
+    const origA=alpha;
+    let best=-INF,bestM=mvs[0];
+    for(let i=0;i<mvs.length;i++){
+        const m=mvs[i];
         const cap=bd[m.toR][m.toC];
         bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
         const opp=sideRed?'black':'red';
         const gives=isInCheck(bd,opp);
-        const newBan=gives?{r:m.fromR,c:m.fromC}:null;
-        const ext=gives?1:0;
-        const sc=-negamax(bd,depth-1+ext,-beta,-alpha,!sideRed,newBan,t0,budget,ply+1);
+        const newBan=gives?{r:m.toR,c:m.toC}:null;
+        let ext=0;
+        if(gives&&extLeft>0)ext=1;
+        let sc;
+        // LMR：非吃子、非将军、靠后的着法
+        if(!inChk&&depth>=3&&i>=4&&cap===0&&!gives){
+            sc=-negamax(bd,depth-2,-alpha-1,-alpha,!sideRed,newBan,t0,budget,ply+1,extLeft);
+            if(sc>alpha)sc=-negamax(bd,depth-1,-beta,-alpha,!sideRed,newBan,t0,budget,ply+1,extLeft-ext);
+        }else{
+            sc=-negamax(bd,depth-1,-beta,-alpha,!sideRed,newBan,t0,budget,ply+1,extLeft-ext);
+        }
         bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
-        if(sc>best)best=sc;
-        if(best>alpha)alpha=best;
-        if(alpha>=beta)break;
+        if(sc>best){
+            best=sc;bestM=m;
+            if(sc>alpha)alpha=sc;
+        }
+        if(alpha>=beta){
+            if(cap===0){
+                killers[ply][1]=killers[ply][0];
+                killers[ply][0]=m;
+                histHeur[m.fromR][m.fromC][m.toR][m.toC]+=depth*depth;
+            }
+            break;
+        }
         if(performance.now()-t0>budget)break;
     }
+    let flag=0;
+    if(best<=origA)flag=1;
+    else if(best>=beta)flag=2;
+    if(TT.size>200000)TT.clear();
+    TT.set(key,{depth,score:best,flag,mv:bestM});
     return best;
 }
 
 function findBest(){
+    TT.clear();
+    for(let i=0;i<killers.length;i++){killers[i][0]=null;killers[i][1]=null}
     const sideRed=aiColor==='red';
     const banFrom=banFor(aiColor);
     const mvs=getLegal(board,aiColor,banFrom);
     if(mvs.length===0)return null;
     const t0=performance.now();
-    const budget=1700;
+    const budget=2100;
     let bestM=mvs[0];
-    for(let d=1;d<=4;d++){
-        const ordered=orderMv(board,mvs);
+    for(let d=1;d<=7;d++){
+        const ordered=orderMv(board,mvs,0,null);
+        // 上一轮最优先走
+        if(d>1){
+            const first=ordered.findIndex(m=>m.fromR===bestM.fromR&&m.fromC===bestM.fromC&&m.toR===bestM.toR&&m.toC===bestM.toC);
+            if(first>0){ordered.splice(first,1);ordered.unshift(bestM)}
+        }
         let localBest=ordered[0],localS=-INF;
         let broke=false;
         for(const m of ordered){
@@ -903,15 +974,15 @@ function findBest(){
             const gives=isInCheck(board,opp);
             const newBan=gives?{r:m.toR,c:m.toC}:null;
             const ext=gives?1:0;
-            // sc 已是本方视角（negamax + 取反）
-            const sc=-negamax(board,d-1+ext,-INF,INF,!sideRed,newBan,t0,budget,1);
+            const sc=-negamax(board,d-1+ext,-INF,INF,!sideRed,newBan,t0,budget,1,3);
             board[m.fromR][m.fromC]=board[m.toR][m.toC];board[m.toR][m.toC]=cap;
             if(sc>localS){localS=sc;localBest=m}
             if(performance.now()-t0>budget){broke=true;break}
         }
-        bestM=localBest;
+        if(localBest)bestM=localBest;
         if(broke)break;
-        if(Math.abs(localS)>INF-200)break;
+        if(Math.abs(localS)>MATE-200)break;
+        if(performance.now()-t0>budget*0.85)break;
     }
     return bestM;
 }
@@ -920,7 +991,7 @@ function scheduleAI(){
     if(gameOver||gameMode!=='ai'||curTurn!==aiColor)return;
     aiThinking=true;render();
     clearTimeout(aiTimer);
-    const thinkMs=1800+Math.random()*500;
+    const thinkMs=2000+Math.random()*400;
     aiTimer=setTimeout(()=>{
         const mv=findBest();
         aiThinking=false;
