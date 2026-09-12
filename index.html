@@ -1,1456 +1,715 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>中国象棋 · 人机对战</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{
-  --bg:#1a140e;--wood:#d4a85a;--wood-dark:#b8893e;--wood-line:#6b3f1a;
-  --ink:#f3e6c8;--red:#c23b2e;--black:#1a1a1a;--gold:#e0b85a;
-  --panel:#241c12;--panel-border:#4a3320;--text:#e8d8c0;--muted:#8a7355;
-  --glow:rgba(224,184,90,0.35);
-}
-html,body{height:100%}
-body{
-  font-family:"Noto Serif SC","STSong","SimSun","Songti SC",serif;
-  background:
-    radial-gradient(ellipse at 20% 10%,rgba(90,55,20,0.35),transparent 50%),
-    radial-gradient(ellipse at 80% 90%,rgba(60,35,12,0.3),transparent 45%),
-    var(--bg);
-  color:var(--text);display:flex;align-items:center;justify-content:center;
-  min-height:100vh;padding:12px;user-select:none;overflow-x:hidden;
-}
-#app{
-  display:flex;gap:22px;align-items:flex-start;
-  max-width:1100px;width:100%;justify-content:center;flex-wrap:wrap;
-}
-.panel{
-  background:linear-gradient(160deg,#2a2116,#1c160f);
-  border:1px solid var(--panel-border);
-  border-radius:10px;padding:16px 18px;min-width:200px;
-  box-shadow:0 8px 32px rgba(0,0,0,0.45);
-}
-.panel h2{
-  font-size:0.95rem;letter-spacing:0.25em;color:var(--gold);
-  border-bottom:1px solid var(--panel-border);padding-bottom:10px;margin-bottom:12px;
-  font-weight:700;
-}
-.status-line{font-size:0.95rem;line-height:1.7;margin-bottom:10px;min-height:2.4em}
-.status-line .hl{color:var(--gold);font-weight:700}
-.turn-badge{
-  display:inline-block;padding:3px 10px;border-radius:999px;font-size:0.8rem;
-  letter-spacing:0.15em;margin-bottom:10px;
-}
-.turn-red{background:rgba(194,59,46,0.2);color:#e07060;border:1px solid rgba(194,59,46,0.45)}
-.turn-black{background:rgba(80,80,80,0.25);color:#c8c0b0;border:1px solid rgba(120,120,120,0.4)}
-.thinking{
-  display:none;align-items:center;gap:8px;font-size:0.85rem;color:var(--muted);
-  margin:8px 0 12px;
-}
-.thinking.on{display:flex}
-.dot-anim span{
-  display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);
-  animation:bounce 1.2s infinite ease-in-out;margin-right:2px;
-}
-.dot-anim span:nth-child(2){animation-delay:0.15s}
-.dot-anim span:nth-child(3){animation-delay:0.3s}
-@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:0.4}40%{transform:translateY(-5px);opacity:1}}
-.btns{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-.btn{
-  padding:10px 14px;background:linear-gradient(135deg,#2e2416,#3a2d1a);
-  border:1px solid #5a4030;color:var(--text);font-family:inherit;font-size:0.92rem;
-  letter-spacing:0.18em;cursor:pointer;border-radius:6px;transition:all 0.22s;
-}
-.btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-1px);box-shadow:0 4px 16px var(--glow)}
-.btn:active{transform:translateY(0)}
-.btn.primary{background:linear-gradient(135deg,#5a3018,#7a4020);border-color:#a06030}
-.btn.primary:hover{border-color:var(--gold)}
-.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}
-.captured{display:flex;flex-wrap:wrap;gap:4px;min-height:36px}
-.cap-chip{
-  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:0.85rem;font-weight:700;border:1px solid rgba(0,0,0,0.3);
-}
-.cap-red{background:radial-gradient(circle at 35% 30%,#f0d8b0,#e8c890);color:var(--red);box-shadow:inset 0 0 0 2px rgba(194,59,46,0.25)}
-.cap-black{background:radial-gradient(circle at 35% 30%,#f0d8b0,#e8c890);color:var(--black);box-shadow:inset 0 0 0 2px rgba(0,0,0,0.2)}
-.log{
-  max-height:180px;overflow-y:auto;font-size:0.78rem;line-height:1.75;color:var(--muted);
-  font-family:"Consolas","Courier New",monospace;
-}
-.log div{padding:1px 0;border-bottom:1px dashed rgba(90,70,40,0.25)}
-.log .last{color:var(--gold)}
-.hint{font-size:0.75rem;color:var(--muted);line-height:1.6;margin-top:10px}
-.board-wrap{position:relative;flex-shrink:0}
-canvas{
-  display:block;border-radius:8px;
-  box-shadow:0 12px 40px rgba(0,0,0,0.55),0 0 0 1px rgba(100,70,30,0.5);
-  cursor:pointer;touch-action:manipulation;
-}
-.overlay{
-  position:fixed;inset:0;background:rgba(13,10,6,0.94);z-index:50;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity 0.35s;gap:8px;
-}
-.overlay.hide{opacity:0;pointer-events:none}
-.overlay h1{
-  font-size:clamp(2rem,6vw,3.2rem);letter-spacing:0.4em;color:var(--gold);
-  font-weight:900;margin-bottom:0.2em;text-shadow:0 2px 28px rgba(224,184,90,0.3);
-}
-.overlay .sub{color:var(--muted);letter-spacing:0.5em;font-size:0.9rem;margin-bottom:2.5em}
-.overlay .menu{display:flex;flex-direction:column;gap:12px}
-.overlay .menu .btn{width:240px;padding:14px 20px;font-size:1.05rem}
-.result-title{font-size:2rem;color:var(--gold);letter-spacing:0.3em;margin-bottom:0.5em}
-.result-sub{color:var(--muted);margin-bottom:2em;font-size:0.95rem}
-.toast{
-  position:fixed;top:18px;left:50%;transform:translateX(-50%) translateY(-20px);
-  background:rgba(40,28,14,0.95);border:1px solid var(--gold);color:var(--gold);
-  padding:10px 22px;border-radius:999px;font-size:0.9rem;letter-spacing:0.12em;
-  opacity:0;pointer-events:none;transition:all 0.3s;z-index:60;white-space:nowrap;
-  box-shadow:0 6px 24px rgba(0,0,0,0.4);
-}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media(max-width:860px){
-  #app{flex-direction:column;align-items:center}
-  .panel{width:100%;max-width:420px}
-  .side-right{order:3}
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国象棋</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            background:#0d0a06;
+            color:#f0e4d0;
+            font-family:'Noto Serif SC','SimSun',serif;
+            min-height:100vh;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            user-select:none;
+            overflow-x:hidden;
+        }
+        body::before{
+            content:'';position:fixed;inset:0;
+            background:
+                radial-gradient(ellipse at 25% 15%,rgba(80,50,20,0.25),transparent 55%),
+                radial-gradient(ellipse at 75% 85%,rgba(60,40,15,0.18),transparent 50%);
+            pointer-events:none;z-index:0;
+        }
+        #app{position:relative;z-index:1}
+
+        /* ---- Overlays ---- */
+        .overlay{
+            position:fixed;inset:0;
+            display:flex;flex-direction:column;
+            justify-content:center;align-items:center;
+            background:rgba(13,10,6,0.96);
+            z-index:100;
+            transition:opacity 0.4s ease;
+        }
+        .overlay.hidden{opacity:0;pointer-events:none}
+        .overlay h1{
+            font-size:3.2rem;font-weight:900;
+            letter-spacing:0.35em;color:#c4973a;
+            text-shadow:0 2px 24px rgba(196,151,58,0.25);
+            margin-bottom:0.3rem;
+        }
+        .subtitle{
+            font-size:0.95rem;color:#6a5a45;
+            letter-spacing:0.6em;margin-bottom:3.2rem;
+        }
+        .overlay h2{
+            font-size:1.7rem;color:#c4973a;
+            margin-bottom:2.2rem;letter-spacing:0.25em;
+        }
+        .menu-buttons{display:flex;flex-direction:column;gap:1rem}
+        .menu-btn{
+            display:block;width:260px;
+            padding:15px 32px;
+            background:linear-gradient(135deg,#241a0e,#332513);
+            border:1px solid #4a3320;
+            color:#e8d8c0;
+            font-family:'Noto Serif SC',serif;
+            font-size:1.15rem;font-weight:700;
+            letter-spacing:0.25em;cursor:pointer;
+            transition:all 0.3s ease;text-align:center;
+        }
+        .menu-btn:hover{
+            background:linear-gradient(135deg,#332513,#443520);
+            border-color:#c4973a;color:#c4973a;
+            transform:translateY(-2px);
+            box-shadow:0 6px 24px rgba(196,151,58,0.18);
+        }
+        .back-btn{
+            margin-top:2.2rem;padding:9px 22px;
+            background:transparent;border:1px solid #3a2a15;
+            color:#6a5a45;font-family:'Noto Serif SC',serif;
+            font-size:0.88rem;cursor:pointer;
+            transition:all 0.3s ease;
+        }
+        .back-btn:hover{border-color:#6a5a45;color:#c0b098}
+
+        /* ---- Game ---- */
+        #game{display:flex;flex-direction:column;align-items:center;gap:14px}
+        #game.hidden{display:none}
+        #game-header{
+            display:flex;justify-content:space-between;align-items:center;
+            width:100%;max-width:600px;
+            padding:8px 18px;
+            background:rgba(30,22,12,0.55);border:1px solid #2a1e10;
+        }
+        #turn-indicator{font-size:1.05rem;font-weight:700}
+        .turn-red{color:#d44}.turn-black{color:#b0b8c0}
+        #game-status{font-size:0.92rem;color:#a09078;min-height:1.2em}
+        canvas#board{
+            cursor:pointer;border-radius:3px;
+            max-width:95vw;max-height:72vh;
+            box-shadow:0 8px 40px rgba(0,0,0,0.55),0 0 80px rgba(80,50,20,0.1);
+        }
+        #game-controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+        .ctrl-btn{
+            padding:9px 22px;
+            background:linear-gradient(135deg,#241a0e,#332513);
+            border:1px solid #3a2a15;color:#d0c0a0;
+            font-family:'Noto Serif SC',serif;
+            font-size:0.88rem;font-weight:600;
+            letter-spacing:0.12em;cursor:pointer;
+            transition:all 0.3s ease;
+        }
+        .ctrl-btn:hover{
+            background:linear-gradient(135deg,#332513,#443520);
+            border-color:#c4973a;color:#c4973a;
+        }
+        .ctrl-btn:disabled{opacity:0.35;cursor:not-allowed}
+
+        /* ---- Game Over ---- */
+        #game-over{
+            position:fixed;inset:0;
+            display:flex;flex-direction:column;
+            justify-content:center;align-items:center;
+            background:rgba(13,10,6,0.88);z-index:200;
+        }
+        #game-over.hidden{display:none}
+        #game-over h2{
+            font-size:2.6rem;color:#c4973a;
+            margin-bottom:0.8rem;letter-spacing:0.35em;
+        }
+        #game-over p{font-size:1.15rem;color:#d0c0a0;margin-bottom:2rem}
+        .go-btns{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
+
+        @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+        .fade-up{animation:fadeUp 0.5s ease forwards}
+    </style>
 </head>
 <body>
 <div id="app">
-  <div class="panel side-left">
-    <h2>对局信息</h2>
-    <div class="turn-badge" id="turnBadge">红方行棋</div>
-    <div class="status-line" id="statusLine">请选择棋子开始对局</div>
-    <div class="thinking" id="thinking">
-      <span>AI 思考中</span>
-      <span class="dot-anim"><span></span><span></span><span></span></span>
+    <div id="menu" class="overlay">
+        <h1 class="fade-up">中国象棋</h1>
+        <p class="subtitle fade-up" style="animation-delay:0.15s">CHINESE CHESS</p>
+        <div class="menu-buttons fade-up" style="animation-delay:0.3s">
+            <button class="menu-btn" onclick="startPvP()">人 人 对 战</button>
+            <button class="menu-btn" onclick="showAIChoice()">人 机 对 战</button>
+        </div>
     </div>
-    <div class="btns">
-      <button class="btn primary" id="btnNew">新对局</button>
-      <button class="btn" id="btnUndo">悔棋</button>
-      <button class="btn" id="btnHint">提示一步</button>
+
+    <div id="ai-choice" class="overlay hidden">
+        <h2>选择执子颜色</h2>
+        <div class="menu-buttons">
+            <button class="menu-btn" onclick="startAI('red')">执 红 先 行</button>
+            <button class="menu-btn" onclick="startAI('black')">执 黑 后 行</button>
+        </div>
+        <button class="back-btn" onclick="showMenu()">返 回</button>
     </div>
-    <p class="hint">你执红先行。点击己方棋子，再点目标点落子。同一棋子不可连续将军。</p>
-  </div>
 
-  <div class="board-wrap">
-    <canvas id="board" width="520" height="580"></canvas>
-  </div>
+    <div id="game" class="hidden">
+        <div id="game-header">
+            <span id="turn-indicator"></span>
+            <span id="game-status"></span>
+        </div>
+        <canvas id="board"></canvas>
+        <div id="game-controls">
+            <button class="ctrl-btn" id="btn-undo" onclick="undoMove()">悔 棋</button>
+            <button class="ctrl-btn" onclick="restartGame()">重新开始</button>
+            <button class="ctrl-btn" onclick="backToMenu()">返回菜单</button>
+        </div>
+    </div>
 
-  <div class="panel side-right">
-    <h2>被吃棋子</h2>
-    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px">红方损失</div>
-    <div class="captured" id="capRed"></div>
-    <div style="font-size:0.75rem;color:var(--muted);margin:10px 0 6px">黑方损失</div>
-    <div class="captured" id="capBlack"></div>
-    <h2 style="margin-top:18px">行棋记录</h2>
-    <div class="log" id="log"></div>
-  </div>
+    <div id="game-over" class="hidden">
+        <h2 id="result-title"></h2>
+        <p id="result-text"></p>
+        <div class="go-btns">
+            <button class="menu-btn" onclick="restartGame()">再来一局</button>
+            <button class="back-btn" onclick="backToMenu()">返回菜单</button>
+        </div>
+    </div>
 </div>
-
-<div class="overlay" id="menuOverlay">
-  <h1>中国象棋</h1>
-  <div class="sub">人 机 对 战</div>
-  <div class="menu">
-    <button class="btn primary" id="btnStart">开始对局</button>
-    <button class="btn" id="btnRules">查看规则</button>
-  </div>
-</div>
-
-<div class="overlay hide" id="rulesOverlay">
-  <h1 style="font-size:1.8rem;letter-spacing:0.2em">基本规则</h1>
-  <div class="panel" style="max-width:420px;line-height:1.9;font-size:0.92rem">
-    <p>· 棋盘九路十横，中间为「楚河汉界」。</p>
-    <p>· 帅/将不得出九宫；仕/士斜走一步；相/象走田字且不可过河、塞象眼不可飞。</p>
-    <p>· 马走日、蹩马腿；车直行任意格；炮吃子需隔一子（炮架）。</p>
-    <p>· 兵/卒未过河只能向前，过河后可左右，不可后退。</p>
-    <p>· 将帅不可照面（中间无子）。</p>
-    <p>· <b style="color:var(--gold)">禁止同一棋子连续将军</b>，违规判负。</p>
-    <p>· 将死对方帅/将即获胜。</p>
-  </div>
-  <button class="btn" style="margin-top:20px;width:200px" id="btnRulesBack">返回</button>
-</div>
-
-<div class="overlay hide" id="resultOverlay">
-  <div class="result-title" id="resultTitle">胜负已分</div>
-  <div class="result-sub" id="resultSub"></div>
-  <div class="menu">
-    <button class="btn primary" id="btnAgain">再来一局</button>
-    <button class="btn" id="btnBackMenu">返回主菜单</button>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
 
 <script>
-(function(){
-"use strict";
+/* =========================================================
+   CONSTANTS
+   ========================================================= */
+const CELL=64,PAD=44,ROWS=10,COLS=9;
+const PIECE_R=Math.floor(CELL*0.43);
+const CW=(COLS-1)*CELL+2*PAD,CH=(ROWS-1)*CELL+2*PAD;
 
-/* ========== 常量与棋盘几何 ========== */
-const COLS=9, ROWS=10;
-const CELL=54, PAD_X=42, PAD_Y=36;
-const BW=PAD_X*2+CELL*(COLS-1);
-const BH=PALLETE_PAD();
-function PALLETE_PAD(){return PAD_Y*2+CELL*(ROWS-1)}
-const RIVER_Y = 4.5;
+const KING=1,ADVISOR=2,BISHOP=3,KNIGHT=4,ROOK=5,CANNON=6,PAWN=7;
 
-const canvas=document.getElementById('board');
-const ctx=canvas.getContext('2d');
-canvas.width=BW; canvas.height=BH;
+const PCHAR={};
+PCHAR[KING]='帅';PCHAR[-KING]='将';
+PCHAR[ADVISOR]='仕';PCHAR[-ADVISOR]='士';
+PCHAR[BISHOP]='相';PCHAR[-BISHOP]='象';
+PCHAR[KNIGHT]='马';PCHAR[-KNIGHT]='马';
+PCHAR[ROOK]='车';PCHAR[-ROOK]='车';
+PCHAR[CANNON]='炮';PCHAR[-CANNON]='炮';
+PCHAR[PAWN]='兵';PCHAR[-PAWN]='卒';
 
-const RED=0, BLACK=1;
-const empty=()=>null;
+const PVAL={};
+PVAL[KING]=10000;PVAL[ADVISOR]=120;PVAL[BISHOP]=120;
+PVAL[KNIGHT]=270;PVAL[ROOK]=600;PVAL[CANNON]=285;PVAL[PAWN]=30;
 
-/* piece: {type, side, id} type: K A B N R C P
- * 子力权重参考象棋中局谱：车最重，炮马次之，仕相防守子，过河兵升值 */
-const PIECE_VAL={K:20000,R:1200,C:520,N:480,B:210,A:210,P:100};
-const PIECE_NAME={
-  K:{[RED]:'帅',[BLACK]:'将'},
-  A:{[RED]:'仕',[BLACK]:'士'},
-  B:{[RED]:'相',[BLACK]:'象'},
-  N:{[RED]:'马',[BLACK]:'马'},
-  R:{[RED]:'车',[BLACK]:'车'},
-  C:{[RED]:'炮',[BLACK]:'炮'},
-  P:{[RED]:'兵',[BLACK]:'卒'}
-};
-
-/* 位置权重：红方视角 y=0 黑底线 → y=9 红底线；黑方走子前先镜像 y */
-const PST={
-  P:[
-    [0,0,0,0,0,0,0,0,0],
-    [15,25,35,40,40,40,35,25,15],
-    [10,20,30,40,45,40,30,20,10],
-    [10,18,28,35,40,35,28,18,10],
-    [8,15,22,30,32,30,22,15,8],
-    [5,10,15,20,22,20,15,10,5],
-    [0,3,6,10,12,10,6,3,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0]
-  ],
-  N:[
-    [4,8,12,12,10,12,12,8,4],
-    [8,16,22,20,18,20,22,16,8],
-    [12,20,30,28,30,28,30,20,12],
-    [12,22,32,36,34,36,32,22,12],
-    [10,20,30,36,40,36,30,20,10],
-    [10,20,30,36,40,36,30,20,10],
-    [8,16,28,32,34,32,28,16,8],
-    [6,14,22,26,28,26,22,14,6],
-    [4,10,16,18,20,18,16,10,4],
-    [0,4,8,8,8,8,8,4,0]
-  ],
-  R:[
-    [6,8,10,12,14,12,10,8,6],
-    [10,14,16,18,20,18,16,14,10],
-    [8,12,14,18,22,18,14,12,8],
-    [8,12,16,20,24,20,16,12,8],
-    [8,12,16,20,24,20,16,12,8],
-    [8,12,16,20,24,20,16,12,8],
-    [8,12,14,18,22,18,14,12,8],
-    [6,10,12,14,16,14,12,10,6],
-    [4,8,10,12,14,12,10,8,4],
-    [2,6,8,10,12,10,8,6,2]
-  ],
-  C:[
-    [6,8,10,14,16,14,10,8,6],
-    [8,12,14,18,20,18,14,12,8],
-    [6,10,14,18,22,18,14,10,6],
-    [6,10,16,20,24,20,16,10,6],
-    [4,8,14,20,24,20,14,8,4],
-    [4,8,14,20,24,20,14,8,4],
-    [6,10,16,20,24,20,16,10,6],
-    [6,10,14,18,22,18,14,10,6],
-    [4,8,10,14,16,14,10,8,4],
-    [0,4,6,8,10,8,6,4,0]
-  ],
-  B:[
-    [0,0,4,0,6,0,4,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,4,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,4,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,4,0,6,0,4,0,0]
-  ],
-  A:[
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,6,0,6,0,0,0],
-    [0,0,0,0,10,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,10,0,0,0,0],
-    [0,0,0,6,0,6,0,0,0],
-    [0,0,0,0,0,0,0,0,0]
-  ],
-  K:[
-    [0,0,0,0,8,0,0,0,0],
-    [0,0,0,0,6,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,6,0,0,0,0],
-    [0,0,0,0,8,0,0,0,0]
-  ]
-};
-
-/* ========== 状态 ========== */
-let board=[]; // board[y][x]
-let turn=RED;
-let selected=null; // {x,y}
-let legalTargets=[];
-let history=[]; // {from,to,captured,movedPiece,checkInfo}
-let capturedRed=[]; // 红方被吃的子（黑方吃红）
-let capturedBlack=[];
-let gameOver=false;
-let anim=null;
-let lastCheckerId=null; // 上一步造成将军的棋子 id
-let consecutiveSameChecker=0;
-let aiThinking=false;
-let aiTimer=null;
-let flipped=false; // 红方在下，始终 y=0 红方底线显示在上? 不：红方在下
-let idSeq=1;
-
-function makeBoard(){
-  const b=Array.from({length:ROWS},()=>Array(COLS).fill(null));
-  const put=(x,y,type,side)=>{
-    b[y][x]={type,side,id:idSeq++};
-  };
-  // 黑方 (y=0)
-  put(0,0,'R',BLACK); put(8,0,'R',BLACK);
-  put(1,0,'N',BLACK); put(7,0,'N',BLACK);
-  put(2,0,'B',BLACK); put(6,0,'B',BLACK);
-  put(3,0,'A',BLACK); put(5,0,'A',BLACK);
-  put(4,0,'K',BLACK);
-  put(1,2,'C',BLACK); put(7,2,'C',BLACK);
-  for(let i=0;i<9;i+=2) put(i,3,'P',BLACK);
-  // 红方 (y=9)
-  put(0,9,'R',RED); put(8,9,'R',RED);
-  put(1,9,'N',RED); put(7,9,'N',RED);
-  put(2,9,'B',RED); put(6,9,'B',RED);
-  put(3,9,'A',RED); put(5,9,'A',RED);
-  put(4,9,'K',RED);
-  put(1,7,'C',RED); put(7,7,'C',RED);
-  for(let i=0;i<9;i+=2) put(i,6,'P',RED);
-  return b;
+function initBoard(){
+    return [
+        [-ROOK,-KNIGHT,-BISHOP,-ADVISOR,-KING,-ADVISOR,-BISHOP,-KNIGHT,-ROOK],
+        [0,0,0,0,0,0,0,0,0],
+        [0,-CANNON,0,0,0,0,0,-CANNON,0],
+        [-PAWN,0,-PAWN,0,-PAWN,0,-PAWN,0,-PAWN],
+        [0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0],
+        [PAWN,0,PAWN,0,PAWN,0,PAWN,0,PAWN],
+        [0,CANNON,0,0,0,0,0,CANNON,0],
+        [0,0,0,0,0,0,0,0,0],
+        [ROOK,KNIGHT,BISHOP,ADVISOR,KING,ADVISOR,BISHOP,KNIGHT,ROOK]
+    ];
 }
 
-function cloneBoard(b){
-  return b.map(row=>row.map(c=>c?{type:c.type,side:c.side,id:c.id}:null));
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+let board=[],curTurn='red',gameMode='pvp',playerColor='red',aiColor='black';
+let sel=null,validM=[],hist=[],gameOver=false,aiThinking=false;
+let lastMv=null,inCheckFlag=false;
+let canvas,ctx;
+
+/* =========================================================
+   RENDERING
+   ========================================================= */
+function initCanvas(){
+    canvas=document.getElementById('board');
+    canvas.width=CW;canvas.height=CH;
+    ctx=canvas.getContext('2d');
 }
-
-function inBoard(x,y){return x>=0&&x<COLS&&y>=0&&y<ROWS}
-
-function findKing(b,side){
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(p&&p.type==='K'&&p.side===side) return {x,y};
-  }
-  return null;
-}
-
-/* ========== 走法生成 ========== */
-function palaceOk(side,x,y){
-  if(x<3||x>5) return false;
-  if(side===RED) return y>=7&&y<=9;
-  return y>=0&&y<=2;
-}
-
-function genRawMoves(b,x,y,forAttackOnly){
-  const p=b[y][x];
-  if(!p) return [];
-  const moves=[];
-  const side=p.side;
-  const push=(nx,ny)=>{
-    if(!inBoard(nx,ny)) return;
-    const t=b[ny][nx];
-    if(t&&t.side===side) return;
-    moves.push({x:nx,y:ny,capture:!!t});
-  };
-
-  switch(p.type){
-    case 'K':{
-      const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
-      for(const [dx,dy] of dirs){
-        const nx=x+dx, ny=y+dy;
-        if(!palaceOk(side,nx,ny)) continue;
-        const t=b[ny][nx];
-        if(t&&t.side===side) continue;
-        moves.push({x:nx,y:ny,capture:!!t});
-      }
-      // 将帅照面作为攻击检测放在 isSquareAttacked
-      break;
-    }
-    case 'A':{
-      const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]];
-      for(const [dx,dy] of dirs){
-        const nx=x+dx, ny=y+dy;
-        if(!palaceOk(side,nx,ny)) continue;
-        push(nx,ny);
-      }
-      break;
-    }
-    case 'B':{
-      const dirs=[[2,2],[2,-2],[-2,2],[-2,-2]];
-      for(const [dx,dy] of dirs){
-        const nx=x+dx, ny=y+dy;
-        if(!inBoard(nx,ny)) continue;
-        // 不可过河
-        if(side===RED&&ny<5) continue;
-        if(side===BLACK&&ny>4) continue;
-        // 塞象眼
-        const ex=x+dx/2, ey=y+dy/2;
-        if(b[ey][ex]) continue;
-        push(nx,ny);
-      }
-      break;
-    }
-    case 'N':{
-      const steps=[
-        [1,2,0,1],[ -1,2,0,1],[1,-2,0,-1],[-1,-2,0,-1],
-        [2,1,1,0],[2,-1,1,0],[-2,1,-1,0],[-2,-1,-1,0]
-      ];
-      for(const [dx,dy,lx,ly] of steps){
-        const nx=x+dx, ny=y+dy;
-        if(!inBoard(nx,ny)) continue;
-        if(b[y+ly]&&b[y+ly][x+lx]) continue; // 蹩马腿
-        push(nx,ny);
-      }
-      break;
-    }
-    case 'R':{
-      const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
-      for(const [dx,dy] of dirs){
-        let nx=x+dx, ny=y+dy;
-        while(inBoard(nx,ny)){
-          const t=b[ny][nx];
-          if(!t){ moves.push({x:nx,y:ny,capture:false}); }
-          else{
-            if(t.side!==side) moves.push({x:nx,y:ny,capture:true});
-            break;
-          }
-          nx+=dx; ny+=dy;
-        }
-      }
-      break;
-    }
-    case 'C':{
-      const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
-      for(const [dx,dy] of dirs){
-        let nx=x+dx, ny=y+dy;
-        let jumped=false;
-        while(inBoard(nx,ny)){
-          const t=b[ny][nx];
-          if(!jumped){
-            if(!t){ if(!forAttackOnly) moves.push({x:nx,y:ny,capture:false}); }
-            else jumped=true;
-          }else{
-            if(t){
-              if(t.side!==side) moves.push({x:nx,y:ny,capture:true});
-              break;
-            }
-          }
-          nx+=dx; ny+=dy;
-        }
-      }
-      break;
-    }
-    case 'P':{
-      const forward = side===RED ? -1 : 1;
-      push(x,y+forward);
-      const crossed = side===RED ? y<=4 : y>=5;
-      if(crossed){ push(x-1,y); push(x+1,y); }
-      break;
-    }
-  }
-  return moves;
-}
-
-function kingsFacing(b){
-  const rk=findKing(b,RED), bk=findKing(b,BLACK);
-  if(!rk||!bk) return false;
-  if(rk.x!==bk.x) return false;
-  const x=rk.x;
-  const y1=Math.min(rk.y,bk.y), y2=Math.max(rk.y,bk.y);
-  for(let y=y1+1;y<y2;y++) if(b[y][x]) return false;
-  return true;
-}
-
-function isSquareAttacked(b,x,y,bySide){
-  for(let yy=0;yy<ROWS;yy++)for(let xx=0;xx<COLS;xx++){
-    const p=b[yy][xx];
-    if(!p||p.side!==bySide) continue;
-    if(p.type==='K'){
-      const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
-      for(const [dx,dy] of dirs){
-        const nx=xx+dx, ny=yy+dy;
-        if(palaceOk(bySide,nx,ny)&&nx===x&&ny===y) return true;
-      }
-      continue;
-    }
-    const ms=genRawMoves(b,xx,yy,true);
-    for(const m of ms){
-      if(m.x===x&&m.y===y) return true;
-    }
-  }
-  return false;
-}
-
-function inCheck(b,side){
-  const k=findKing(b,side);
-  if(!k) return true;
-  const enemy=side===RED?BLACK:RED;
-  if(isSquareAttacked(b,k.x,k.y,enemy)) return true;
-  if(kingsFacing(b)) return true;
-  return false;
-}
-
-function genLegalMoves(b,x,y,banCheckerId){
-  const p=b[y][x];
-  if(!p) return [];
-  const raw=genRawMoves(b,x,y,false);
-  const legal=[];
-  for(const m of raw){
-    const nb=cloneBoard(b);
-    const moving=nb[y][x];
-    nb[m.y][m.x]=moving;
-    nb[y][x]=null;
-    if(inCheck(nb,p.side)) continue;
-    // 规则：禁止同一棋子连续将军
-    if(banCheckerId!=null && moving.id===banCheckerId){
-      // 该子若此步仍将军，则禁止
-      if(inCheck(nb, p.side===RED?BLACK:RED)) continue;
-    }
-    legal.push(m);
-  }
-  return legal;
-}
-
-function genAllLegalMoves(b,side,banCheckerId){
-  const out=[];
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(!p||p.side!==side) continue;
-    const ms=genLegalMoves(b,x,y,banCheckerId);
-    for(const m of ms) out.push({fx:x,fy:y,tx:m.x,ty:m.y,capture:m.capture,piece:p});
-  }
-  return out;
-}
-
-/* ========== 评估（权重公式 + 攻防策略） ==========
- *
- * score(红视角) = 子力Σ + 位置Σ + 机动性 + 进攻 + 防守 + 王安全 + 威胁
- *
- * 进攻策略：
- *   · 车占肋道/兵行线/对方九宫线，可多向控盘
- *   · 马过河挂角、卧槽（靠近对方将）
- *   · 炮沉底/有架瞄准九宫
- *   · 过河兵（尤其高兵、低兵）升值，可侧击
- *   · 子力集中攻击对方九宫附近
- * 防守策略：
- *   · 仕相在位护宫，缺仕/缺相罚分
- *   · 将帅受攻击子数越多罚分越大
- *   · 悬空子（被吃且不被保护）重罚，反捉轻赏
- *   · 防止车炮沉底线无根
- */
-function isInPalace(x,y,side){
-  if(x<3||x>5) return false;
-  return side===RED ? (y>=7&&y<=9) : (y>=0&&y<=2);
-}
-
-function pawnValue(side,x,y){
-  // 过河后随推进升值；到底线成老兵略降但仍强于未过河
-  if(side===RED){
-    if(y>4) return PIECE_VAL.P;
-    if(y===4) return 130;
-    if(y===3) return 170;
-    if(y===2) return 220;
-    if(y===1) return 260;
-    return 200; // 底线老兵
-  }else{
-    if(y<5) return PIECE_VAL.P;
-    if(y===5) return 130;
-    if(y===6) return 170;
-    if(y===7) return 220;
-    if(y===8) return 260;
-    return 200;
-  }
-}
-
-function countAttackersTo(b,tx,ty,bySide){
-  let n=0;
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(!p||p.side!==bySide) continue;
-    if(x===tx&&y===ty) continue; // 不把自己算成攻击者
-    if(p.type==='R'||p.type==='C'){
-      const dx=Math.sign(tx-x), dy=Math.sign(ty-y);
-      if(!(dx===0||dy===0)) continue;
-      if(dx===0&&dy===0) continue;
-      let nx=x+dx, ny=y+dy, screens=0;
-      while(inBoard(nx,ny)){
-        if(nx===tx&&ny===ty){
-          if(p.type==='R'&&screens===0) n++;
-          if(p.type==='C'&&screens===1) n++;
-          break;
-        }
-        if(b[ny][nx]) screens++;
-        if(screens>1) break;
-        nx+=dx; ny+=dy;
-      }
-    }else if(p.type==='N'){
-      const steps=[[1,2,0,1],[-1,2,0,1],[1,-2,0,-1],[-1,-2,0,-1],[2,1,1,0],[2,-1,1,0],[-2,1,-1,0],[-2,-1,-1,0]];
-      for(const [sx,sy,lx,ly] of steps){
-        if(x+sx===tx&&y+sy===ty){
-          if(!(b[y+ly]&&b[y+ly][x+lx])){ n++; break; }
-        }
-      }
-    }else if(p.type==='P'){
-      const fwd=bySide===RED?-1:1;
-      if(x===tx&&y+fwd===ty) n++;
-      else if(y===ty&&Math.abs(x-tx)===1){
-        const crossed=bySide===RED?(y<=4):(y>=5);
-        if(crossed) n++;
-      }
-    }else if(p.type==='K'){
-      if(palaceOk(bySide,tx,ty)&&Math.abs(x-tx)+Math.abs(y-ty)===1) n++;
-    }else if(p.type==='A'){
-      if(palaceOk(bySide,tx,ty)&&Math.abs(x-tx)===1&&Math.abs(y-ty)===1) n++;
-    }else if(p.type==='B'){
-      if(Math.abs(x-tx)===2&&Math.abs(y-ty)===2){
-        if(bySide===RED&&ty<5) continue;
-        if(bySide===BLACK&&ty>4) continue;
-        const ex=(x+tx)/2, ey=(y+ty)/2;
-        if(!(b[ey]&&b[ey][ex])) n++;
-      }
-    }
-  }
-  return n;
-}
-
-function pieceStaticScore(p,x,y){
-  // 仅位置分，不含子力底价
-  const pst=PST[p.type];
-  const pstY=p.side===RED?y:(ROWS-1-y);
-  return pst[pstY][x]||0;
-}
-
-function evaluate(b){
-  let score=0; // 红方视角
-  let redR=0, blackR=0, redC=0, blackC=0, redN=0, blackN=0;
-  let redAdv=0, blackAdv=0;
-  let redA=0, blackA=0, redB=0, blackB=0;
-  let redMater=0, blackMater=0;
-  const redHeavy=[], blackHeavy=[];
-
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(!p) continue;
-    let v=p.type==='P' ? pawnValue(p.side,x,y) : PIECE_VAL[p.type];
-    v+=pieceStaticScore(p,x,y);
-    if(p.side===RED){
-      redMater+=v;
-      if(p.type==='R'){redR++; redHeavy.push({x,y,type:p.type});}
-      if(p.type==='C'){redC++; redHeavy.push({x,y,type:p.type});}
-      if(p.type==='N'){redN++; redHeavy.push({x,y,type:p.type});}
-      if(p.type==='P'&&y<=4) redAdv++;
-      if(p.type==='A') redA++;
-      if(p.type==='B') redB++;
-    }else{
-      blackMater+=v;
-      if(p.type==='R'){blackR++; blackHeavy.push({x,y,type:p.type});}
-      if(p.type==='C'){blackC++; blackHeavy.push({x,y,type:p.type});}
-      if(p.type==='N'){blackN++; blackHeavy.push({x,y,type:p.type});}
-      if(p.type==='P'&&y>=5) blackAdv++;
-      if(p.type==='A') blackA++;
-      if(p.type==='B') blackB++;
-    }
-  }
-  score += redMater - blackMater;
-
-  function attackBonus(side, heavies, advPawns, n){
-    let s=0;
-    const kx=4, ky=side===RED?1:8;
-    for(const h of heavies){
-      const dist=Math.abs(h.x-kx)+Math.abs(h.y-ky);
-      s += Math.max(0,(8-dist))*4;
-      if(h.type==='R'){
-        if(h.x===3||h.x===5) s+=12;
-        if(h.x===4) s+=10;
-        if(side===RED&&h.y<=2) s+=16;
-        if(side===BLACK&&h.y>=7) s+=16;
-      }
-      if(h.type==='C'){
-        if(h.x===4) s+=8;
-        if(side===RED&&h.y<=4) s+=10;
-        if(side===BLACK&&h.y>=5) s+=10;
-      }
-      if(h.type==='N'){
-        if(side===RED&&h.y<=4) s+=14;
-        if(side===BLACK&&h.y>=5) s+=14;
-        if(side===RED&&h.y<=2&&(h.x<=1||h.x>=7||h.x===3||h.x===5)) s+=18;
-        if(side===BLACK&&h.y>=7&&(h.x<=1||h.x>=7||h.x===3||h.x===5)) s+=18;
-      }
-    }
-    s += advPawns*22;
-    s += n*3;
-    return s;
-  }
-
-  score += attackBonus(RED, redHeavy, redAdv, redR+redC+redN);
-  score -= attackBonus(BLACK, blackHeavy, blackAdv, blackR+blackC+blackN);
-
-  function defenseBonus(aCount,bCount){
-    let s=0;
-    s += aCount===2?35:aCount*12;
-    s += bCount===2?28:bCount*10;
-    if(aCount<2) s-=(2-aCount)*20;
-    if(bCount<2) s-=(2-bCount)*16;
-    return s;
-  }
-  score += defenseBonus(redA,redB);
-  score -= defenseBonus(blackA,blackB);
-
-  const rk=findKing(b,RED), bk=findKing(b,BLACK);
-  if(rk){
-    const atk=countAttackersTo(b,rk.x,rk.y,BLACK);
-    score -= atk*atk*45 + atk*30;
-    if(redA===0) score-=40;
-  }
-  if(bk){
-    const atk=countAttackersTo(b,bk.x,bk.y,RED);
-    score += atk*atk*45 + atk*30;
-    if(blackA===0) score+=40;
-  }
-
-  function hangingPenalty(side){
-    let pen=0;
-    const enemy=side===RED?BLACK:RED;
-    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-      const p=b[y][x];
-      if(!p||p.side!==side) continue;
-      if(p.type==='K'||p.type==='A') continue;
-      const atk=countAttackersTo(b,x,y,enemy);
-      if(atk===0) continue;
-      const def=countAttackersTo(b,x,y,side);
-      const pv=p.type==='P'?pawnValue(side,x,y):PIECE_VAL[p.type];
-      if(def===0) pen += pv*0.85 + (p.type==='R'?80:0) + ((p.type==='N'||p.type==='C')?40:0);
-      else if(def<atk) pen += pv*0.35;
-    }
-    return pen;
-  }
-  score -= hangingPenalty(RED);
-  score += hangingPenalty(BLACK);
-
-  score += (estimateMobility(b,RED)-estimateMobility(b,BLACK))*1.2;
-  return score;
-}
-
-function estimateMobility(b,side){
-  let m=0;
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(!p||p.side!==side) continue;
-    const ms=genRawMoves(b,x,y,false);
-    m+=ms.length;
-    // 大子机动价值更高
-    if(p.type==='R') m+=ms.length*0.8;
-    if(p.type==='N') m+=ms.length*0.5;
-    if(p.type==='C') m+=ms.length*0.4;
-  }
-  return m;
-}
-
-function evalFor(b, side){
-  const e=evaluate(b);
-  return side===RED ? e : -e;
-}
-
-/* MVV-LVA + 位置：吃子优先，再考虑升值/进攻 */
-function moveScoreWeight(b,mv){
-  const mover=b[mv.fy][mv.fx];
-  if(!mover) return 0;
-  let w=0;
-  if(mv.capture){
-    const victim=b[mv.ty][mv.tx];
-    if(victim){
-      const vv=victim.type==='P'?pawnValue(victim.side,mv.tx,mv.ty):PIECE_VAL[victim.type];
-      const av=PIECE_VAL[mover.type]||100;
-      w += vv*10 - av*0.5; // MVV-LVA
-    }
-  }
-  w += pieceStaticScore(mover,mv.tx,mv.ty)*0.8;
-  if(mover.type==='P') w+=20;
-  if(mover.type==='R'&&(mv.tx===3||mv.tx===5||mv.tx===4)) w+=15;
-  if(mover.type==='N'){
-    if(mover.side===RED&&mv.ty<=4) w+=25;
-    if(mover.side===BLACK&&mv.ty>=5) w+=25;
-  }
-  // 吃无根大子额外加分
-  if(mv.capture){
-    const victim=b[mv.ty][mv.tx];
-    if(victim&&victim.type!=='P'){
-      const def=countAttackersTo(b,mv.ty,mv.tx,mover.side);
-      // def 在吃子前算保护，这里近似
-      if(def<=1) w+=PIECE_VAL[victim.type]*2;
-    }
-  }
-  return w;
-}
-
-function orderMoves(b,moves){
-  return moves.slice().sort((a,c)=>moveScoreWeight(b,c)-moveScoreWeight(b,a));
-}
-
-/* ========== 搜索：迭代加深 + αβ + 静止搜索 ========== */
-const INF=1e9;
-
-function makeMove(b,mv){
-  const nb=cloneBoard(b);
-  nb[mv.ty][mv.tx]=nb[mv.fy][mv.fx];
-  nb[mv.fy][mv.fx]=null;
-  return nb;
-}
-
-function quiescence(b,side,alpha,beta,t0,budget){
-  if(performance.now()-t0>budget) return evalFor(b,side);
-  const stand=evalFor(b,side);
-  if(side===RED){
-    if(stand>=beta) return stand;
-    if(stand>alpha) alpha=stand;
-  }else{
-    if(stand<=alpha) return stand;
-    if(stand<beta) beta=stand;
-  }
-  const caps=[];
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=b[y][x];
-    if(!p||p.side!==side) continue;
-    const ms=genRawMoves(b,x,y,false);
-    for(const m of ms){
-      if(!m.capture) continue;
-      caps.push({fx:x,fy:y,tx:m.x,ty:m.y,capture:true,piece:p});
-    }
-  }
-  caps.sort((a,c)=>{
-    const va=b[a.ty][a.tx], vc=b[c.ty][c.tx];
-    return (vc?PIECE_VAL[vc.type]:0)-(va?PIECE_VAL[va.type]:0);
-  });
-  for(const mv of caps.slice(0,14)){
-    const nb=makeMove(b,mv);
-    if(inCheck(nb,side)) continue;
-    const opp=side===RED?BLACK:RED;
-    const sc=-quiescence(nb,opp,-beta,-alpha,t0,budget);
-    if(side===RED){
-      if(sc>alpha) alpha=sc;
-      if(alpha>=beta) return alpha;
-    }else{
-      if(sc<beta) beta=sc;
-      if(beta<=alpha) return beta;
-    }
-    if(performance.now()-t0>budget) break;
-  }
-  return side===RED?alpha:beta;
-}
-
-function negamaxSearch(b,d,alpha,beta,side,banId,t0,budget,ply){
-  if(performance.now()-t0>budget) return evalFor(b,side);
-  if(d<=0) return quiescence(b,side,alpha,beta,t0,budget);
-
-  const moves=orderMoves(b,genAllLegalMoves(b,side,banId));
-  if(moves.length===0){
-    if(inCheck(b,side)) return -INF+ply;
-    return 0;
-  }
-
-  let best=-INF;
-  for(const mv of moves){
-    const nb=makeMove(b,mv);
-    const opp=side===RED?BLACK:RED;
-    const gives=inCheck(nb,opp);
-    const newBan=gives?mv.piece.id:null;
-    const ext=gives?1:0;
-    const sc=-negamaxSearch(nb, d-1+ext, -beta, -alpha, opp, newBan, t0, budget, ply+1);
-    if(sc>best) best=sc;
-    if(best>alpha) alpha=best;
-    if(alpha>=beta) break;
-    if(performance.now()-t0>budget) break;
-  }
-  return best;
-}
-
-function searchMove(b, side, depth, banCheckerId, timeBudget){
-  const t0=performance.now();
-  let best=null;
-  let bestScore=-INF;
-  const legal=genAllLegalMoves(b,side,banCheckerId);
-  if(!legal.length) return {move:null,score:0,nodes:0};
-
-  for(let d=1; d<=depth; d++){
-    const ordered=orderMoves(b,legal);
-    let alpha=-INF, localBest=null, localScore=-INF;
-    let broke=false;
-    for(const mv of ordered){
-      const nb=makeMove(b,mv);
-      const opp=side===RED?BLACK:RED;
-      const gives=inCheck(nb,opp);
-      const newBan=gives?mv.piece.id:null;
-      const ext=gives?1:0;
-      const sc=-negamaxSearch(nb, d-1+ext, -INF, -alpha, opp, newBan, t0, timeBudget, 1);
-      if(sc>localScore){ localScore=sc; localBest=mv; }
-      if(sc>alpha) alpha=sc;
-      if(performance.now()-t0>timeBudget){ broke=true; break; }
-    }
-    if(localBest){ best=localBest; bestScore=localScore; }
-    if(broke) break;
-    if(localScore>INF-200) break;
-  }
-  return {move:best,score:bestScore,nodes:0};
-}
-
-/* ========== 绘制 ========== */
-function px(x){return PAD_X + x*CELL}
-function py(y){return PAD_Y + y*CELL}
+function cx(c){return PAD+c*CELL}
+function cy(r){return PAD+r*CELL}
 
 function drawBoard(){
-  const g=ctx.createLinearGradient(0,0,BW,BH);
-  g.addColorStop(0,'#e8c878');
-  g.addColorStop(0.45,'#d4a85a');
-  g.addColorStop(1,'#c49248');
-  ctx.fillStyle=g;
-  ctx.fillRect(0,0,BW,BH);
-
-  // 木纹
-  ctx.strokeStyle='rgba(107,63,26,0.08)';
-  ctx.lineWidth=1;
-  for(let i=0;i<40;i++){
-    ctx.beginPath();
-    const y0=i*14+Math.sin(i)*3;
-    ctx.moveTo(0,y0);
-    ctx.bezierCurveTo(BW*0.3,y0+8,BW*0.6,y0-6,BW,y0+4);
-    ctx.stroke();
-  }
-
-  // 外框
-  ctx.strokeStyle='#6b3f1a';
-  ctx.lineWidth=3;
-  ctx.strokeRect(PAD_X-12,PAD_Y-12,CELL*8+24,CELL*9+24);
-
-  ctx.lineWidth=1.5;
-  ctx.strokeStyle='#5a3418';
-
-  // 横线
-  for(let r=0;r<ROWS;r++){
-    ctx.beginPath();
-    ctx.moveTo(px(0),py(r));
-    ctx.lineTo(px(8),py(r));
-    ctx.stroke();
-  }
-  // 竖线（两边满，中间河断）
-  for(let c=0;c<COLS;c++){
-    if(c===0||c===8){
-      ctx.beginPath();
-      ctx.moveTo(px(c),py(0));
-      ctx.lineTo(px(c),py(9));
-      ctx.stroke();
-    }else{
-      ctx.beginPath();
-      ctx.moveTo(px(c),py(0));
-      ctx.lineTo(px(c),py(4));
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(px(c),py(5));
-      ctx.lineTo(px(c),py(9));
-      ctx.stroke();
+    ctx.fillStyle='#deb768';ctx.fillRect(0,0,CW,CH);
+    ctx.save();ctx.globalAlpha=0.06;
+    for(let i=0;i<CH;i+=3){
+        ctx.strokeStyle=i%6===0?'#a07030':'#c09050';
+        ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(CW,i);ctx.stroke();
     }
-  }
+    ctx.restore();
 
-  // 九宫斜线
-  const palaceLines=[
-    [3,0,5,2],[5,0,3,2],
-    [3,7,5,9],[5,7,3,9]
-  ];
-  ctx.lineWidth=1.2;
-  for(const [x1,y1,x2,y2] of palaceLines){
-    ctx.beginPath();
-    ctx.moveTo(px(x1),py(y1));
-    ctx.lineTo(px(x2),py(y2));
-    ctx.stroke();
-  }
+    ctx.strokeStyle='#5c3a1e';ctx.lineWidth=2.5;
+    ctx.strokeRect(PAD-10,PAD-10,(COLS-1)*CELL+20,(ROWS-1)*CELL+20);
+    ctx.lineWidth=0.8;
+    ctx.strokeRect(PAD-15,PAD-15,(COLS-1)*CELL+30,(ROWS-1)*CELL+30);
 
-  // 兵炮位十字
-  const marks=[];
-  [1,7].forEach(x=>{[2,7].forEach(y=>marks.push([x,y]))});
-  [0,2,4,6,8].forEach(x=>marks.push([x,3]));
-  [0,2,4,6,8].forEach(x=>marks.push([x,6]));
-  ctx.strokeStyle='rgba(90,52,24,0.55)';
-  ctx.lineWidth=1;
-  for(const [x,y] of marks) drawMark(x,y);
-
-  // 河界文字
-  ctx.fillStyle='rgba(90,52,24,0.55)';
-  ctx.font='bold 22px "Noto Serif SC","STSong","SimSun",serif';
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.fillText('楚 河', px(2), py(4)+CELL/2);
-  ctx.fillText('汉 界', px(6), py(4)+CELL/2);
-
-  // 坐标
-  ctx.font='11px sans-serif';
-  ctx.fillStyle='rgba(90,52,24,0.5)';
-  for(let x=0;x<9;x++) ctx.fillText(String(x+1), px(x), PAD_Y-20);
-}
-
-function drawMark(x,y){
-  const s=6, g=4;
-  const X=px(x), Y=py(y);
-  const corners=[
-    [-1,-1],[1,-1],[-1,1],[1,1]
-  ];
-  for(const [dx,dy] of corners){
-    ctx.beginPath();
-    if(dx<0&&dy<0){
-      ctx.moveTo(X-g,Y-g-s); ctx.lineTo(X-g,Y-g); ctx.lineTo(X-g-s,Y-g);
-    }else if(dx>0&&dy<0){
-      ctx.moveTo(X+g,Y-g-s); ctx.lineTo(X+g,Y-g); ctx.lineTo(X+g+s,Y-g);
-    }else if(dx<0&&dy>0){
-      ctx.moveTo(X-g,Y+g+s); ctx.lineTo(X-g,Y+g); ctx.lineTo(X-g-s,Y+g);
-    }else{
-      ctx.moveTo(X+g,Y+g+s); ctx.lineTo(X+g,Y+g); ctx.lineTo(X+g+s,Y+g);
+    ctx.strokeStyle='#5c3a1e';ctx.lineWidth=1;
+    for(let r=0;r<ROWS;r++){ctx.beginPath();ctx.moveTo(cx(0),cy(r));ctx.lineTo(cx(8),cy(r));ctx.stroke()}
+    for(let c=0;c<COLS;c++){
+        if(c===0||c===8){ctx.beginPath();ctx.moveTo(cx(c),cy(0));ctx.lineTo(cx(c),cy(9));ctx.stroke()}
+        else{ctx.beginPath();ctx.moveTo(cx(c),cy(0));ctx.lineTo(cx(c),cy(4));ctx.stroke();
+             ctx.beginPath();ctx.moveTo(cx(c),cy(5));ctx.lineTo(cx(c),cy(9));ctx.stroke()}
     }
-    ctx.stroke();
-  }
-}
+    ctx.beginPath();ctx.moveTo(cx(3),cy(0));ctx.lineTo(cx(5),cy(2));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx(5),cy(0));ctx.lineTo(cx(3),cy(2));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx(3),cy(7));ctx.lineTo(cx(5),cy(9));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx(5),cy(7));ctx.lineTo(cx(3),cy(9));ctx.stroke();
 
-function drawPiece(p,cx,cy,highlight,ghost){
-  const r=CELL*0.42;
-  // 影子
-  if(!ghost){
-    ctx.beginPath();
-    ctx.arc(cx+2,cy+3,r,0,Math.PI*2);
-    ctx.fillStyle='rgba(0,0,0,0.22)';
-    ctx.fill();
-  }
+    ctx.save();ctx.font=`bold ${CELL*0.44}px "Noto Serif SC",serif`;
+    ctx.fillStyle='#5c3a1e';ctx.textAlign='center';ctx.textBaseline='middle';
+    const ry=(cy(4)+cy(5))/2;
+    ctx.fillText('楚  河',cx(2),ry);ctx.fillText('汉  界',cx(6),ry);
+    ctx.restore();
 
-  const grad=ctx.createRadialGradient(cx-r*0.3,cy-r*0.35,r*0.15,cx,cy,r);
-  grad.addColorStop(0,'#f8e8c0');
-  grad.addColorStop(0.7,'#e0c488');
-  grad.addColorStop(1,'#c4a060');
-
-  ctx.beginPath();
-  ctx.arc(cx,cy,r,0,Math.PI*2);
-  ctx.fillStyle=ghost?'rgba(220,190,130,0.55)':grad;
-  ctx.fill();
-
-  ctx.lineWidth=2;
-  ctx.strokeStyle = p.side===RED ? '#8b1e14' : '#1a1a1a';
-  if(ghost) ctx.strokeStyle='rgba(80,50,20,0.35)';
-  ctx.stroke();
-
-  // 内圈
-  ctx.beginPath();
-  ctx.arc(cx,cy,r*0.78,0,Math.PI*2);
-  ctx.lineWidth=1.2;
-  ctx.strokeStyle = p.side===RED ? 'rgba(139,30,20,0.45)' : 'rgba(26,26,26,0.4)';
-  if(ghost) ctx.strokeStyle='rgba(80,50,20,0.25)';
-  ctx.stroke();
-
-  if(highlight){
-    ctx.beginPath();
-    ctx.arc(cx,cy,r+4,0,Math.PI*2);
-    ctx.strokeStyle='rgba(224,184,90,0.9)';
-    ctx.lineWidth=2.5;
-    ctx.stroke();
-  }
-
-  const name=PIECE_NAME[p.type][p.side];
-  ctx.font=`bold ${Math.floor(r*1.05)}px "Noto Serif SC","STSong","SimSun",serif`;
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.fillStyle = p.side===RED ? '#b02018' : '#1a1a1a';
-  if(ghost) ctx.fillStyle='rgba(80,50,20,0.4)';
-  ctx.fillText(name,cx,cy+1);
-}
-
-function drawDots(){
-  for(const t of legalTargets){
-    const cx=px(t.x), cy=py(t.y);
-    if(t.capture){
-      ctx.beginPath();
-      ctx.arc(cx,cy,CELL*0.42,0,Math.PI*2);
-      ctx.strokeStyle='rgba(194,59,46,0.85)';
-      ctx.lineWidth=3;
-      ctx.stroke();
-    }else{
-      ctx.beginPath();
-      ctx.arc(cx,cy,7,0,Math.PI*2);
-      ctx.fillStyle='rgba(90,60,25,0.45)';
-      ctx.fill();
+    const markers=[[1,2],[7,2],[0,3],[2,3],[4,3],[6,3],[8,3],
+                   [0,6],[2,6],[4,6],[6,6],[8,6],[1,7],[7,7]];
+    const sz=5,gap=3;
+    for(const[cc,cr]of markers){
+        const x=cx(cc),y=cy(cr);
+        ctx.strokeStyle='#5c3a1e';ctx.lineWidth=1;
+        const parts=[];
+        if(cc>0){parts.push([-1,-1],[-1,1])}
+        if(cc<8){parts.push([1,-1],[1,1])}
+        for(const[dx,dy]of parts){
+            const ox=x+dx*gap,oy=y+dy*gap;
+            ctx.beginPath();ctx.moveTo(ox+dx*sz,oy);ctx.lineTo(ox,oy);ctx.lineTo(ox,oy+dy*sz);ctx.stroke();
+        }
     }
-  }
+
+    if(lastMv){
+        ctx.fillStyle='rgba(196,151,58,0.18)';
+        ctx.fillRect(cx(lastMv.fromC)-CELL*0.4,cy(lastMv.fromR)-CELL*0.4,CELL*0.8,CELL*0.8);
+        ctx.fillRect(cx(lastMv.toC)-CELL*0.4,cy(lastMv.toR)-CELL*0.4,CELL*0.8,CELL*0.8);
+    }
 }
 
-function drawLastMove(){
-  if(!history.length) return;
-  const h=history[history.length-1];
-  ctx.strokeStyle='rgba(100,70,20,0.45)';
-  ctx.lineWidth=1.5;
-  ctx.setLineDash([4,3]);
-  ctx.strokeRect(px(h.from.x)-CELL*0.4, py(h.from.y)-CELL*0.4, CELL*0.8, CELL*0.8);
-  ctx.strokeRect(px(h.to.x)-CELL*0.4, py(h.to.y)-CELL*0.4, CELL*0.8, CELL*0.8);
-  ctx.setLineDash([]);
+function drawPiece(col,row,piece,isSel,isCheck){
+    const x=cx(col),y=cy(row),isRed=piece>0;
+    ctx.beginPath();ctx.arc(x+2,y+3,PIECE_R,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.22)';ctx.fill();
+
+    ctx.beginPath();ctx.arc(x,y,PIECE_R,0,Math.PI*2);
+    const g=ctx.createRadialGradient(x-PIECE_R*0.3,y-PIECE_R*0.3,PIECE_R*0.1,x,y,PIECE_R);
+    g.addColorStop(0,'#f8ecd0');g.addColorStop(0.65,'#e6d2ac');g.addColorStop(1,'#d0b888');
+    ctx.fillStyle=g;ctx.fill();
+    ctx.strokeStyle=isRed?'#8b1a1a':'#1a1a2e';ctx.lineWidth=2.5;ctx.stroke();
+
+    ctx.beginPath();ctx.arc(x,y,PIECE_R*0.82,0,Math.PI*2);
+    ctx.strokeStyle=isRed?'#8b1a1a':'#1a1a2e';ctx.lineWidth=1.1;ctx.stroke();
+
+    ctx.font=`bold ${Math.floor(PIECE_R*1.15)}px "Noto Serif SC","SimSun",serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=isRed?'#8b1a1a':'#1a1a2e';
+    ctx.fillText(PCHAR[piece],x,y+1);
+
+    if(isSel){
+        ctx.save();ctx.shadowColor='#ffd700';ctx.shadowBlur=16;
+        ctx.beginPath();ctx.arc(x,y,PIECE_R+3,0,Math.PI*2);
+        ctx.strokeStyle='#ffd700';ctx.lineWidth=3;ctx.stroke();ctx.restore();
+    }
+    if(isCheck){
+        ctx.save();ctx.shadowColor='#ff3333';ctx.shadowBlur=22;
+        ctx.beginPath();ctx.arc(x,y,PIECE_R+2,0,Math.PI*2);
+        ctx.strokeStyle='#ff3333';ctx.lineWidth=3;ctx.stroke();ctx.restore();
+    }
 }
 
-function drawCheckGlow(side){
-  const k=findKing(board,side);
-  if(!k) return;
-  const cx=px(k.x), cy=py(k.y);
-  const pulse=0.5+0.5*Math.sin(performance.now()/200);
-  ctx.beginPath();
-  ctx.arc(cx,cy,CELL*0.48+pulse*4,0,Math.PI*2);
-  ctx.strokeStyle=`rgba(194,59,46,${0.45+pulse*0.35})`;
-  ctx.lineWidth=3;
-  ctx.stroke();
+function drawPieces(){
+    const checkSide=curTurn;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const p=board[r][c];if(p===0)continue;
+        const isKCheck=inCheckFlag&&
+            ((checkSide==='red'&&p===KING)||(checkSide==='black'&&p===-KING));
+        const isSel=sel&&sel.r===r&&sel.c===c;
+        drawPiece(c,r,p,isSel,isKCheck);
+    }
+}
+
+function drawValid(){
+    for(const m of validM){
+        const x=cx(m.toC),y=cy(m.toR);
+        if(board[m.toR][m.toC]!==0){
+            ctx.beginPath();ctx.arc(x,y,PIECE_R+4,0,Math.PI*2);
+            ctx.strokeStyle='rgba(210,45,45,0.55)';ctx.lineWidth=3;ctx.stroke();
+        }else{
+            ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);
+            ctx.fillStyle='rgba(90,65,35,0.38)';ctx.fill();
+        }
+    }
 }
 
 function render(){
-  drawBoard();
-  drawLastMove();
-  if(selected){
-    ctx.beginPath();
-    ctx.arc(px(selected.x),py(selected.y),CELL*0.46,0,Math.PI*2);
-    ctx.strokeStyle='rgba(224,184,90,0.85)';
-    ctx.lineWidth=2;
-    ctx.stroke();
-  }
-  drawDots();
-
-  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
-    const p=board[y][x];
-    if(!p) continue;
-    if(anim && anim.from.x===x && anim.from.y===y) continue;
-    if(anim && anim.to.x===x && anim.to.y===y) continue;
-    drawPiece(p, px(x), py(y), selected&&selected.x===x&&selected.y===y);
-  }
-
-  if(anim){
-    const t=Math.min(1,(performance.now()-anim.t0)/anim.dur);
-    const e=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
-    const cx=px(anim.from.x)+(px(anim.to.x)-px(anim.from.x))*e;
-    const cy=py(anim.from.y)+(py(anim.to.y)-py(anim.from.y))*e;
-    drawPiece(anim.piece, cx, cy, false);
-    if(t>=1) finishAnim();
-  }
-
-  if(inCheck(board,turn)&&!gameOver) drawCheckGlow(turn);
-  requestAnimationFrame(render);
-}
-
-function finishAnim(){
-  if(!anim) return;
-  const a=anim;
-  anim=null;
-  if(a.after) a.after();
-}
-
-/* ========== UI ========== */
-const $=id=>document.getElementById(id);
-const turnBadge=$('turnBadge');
-const statusLine=$('statusLine');
-const thinkingEl=$('thinking');
-const logEl=$('log');
-const capRed=$('capRed');
-const capBlack=$('capBlack');
-const toastEl=$('toast');
-
-function showToast(msg){
-  toastEl.textContent=msg;
-  toastEl.classList.add('show');
-  clearTimeout(showToast._t);
-  showToast._t=setTimeout(()=>toastEl.classList.remove('show'),2200);
+    drawBoard();drawValid();drawPieces();updateUI();
 }
 
 function updateUI(){
-  turnBadge.textContent=turn===RED?'红方行棋':'黑方行棋';
-  turnBadge.className='turn-badge '+(turn===RED?'turn-red':'turn-black');
-  thinkingEl.classList.toggle('on',aiThinking);
-
-  capRed.innerHTML=capturedRed.map(p=>`<div class="cap-chip cap-red">${PIECE_NAME[p.type][RED]}</div>`).join('');
-  capBlack.innerHTML=capturedBlack.map(p=>`<div class="cap-chip cap-black">${PIECE_NAME[p.type][BLACK]}</div>`).join('');
-
-  logEl.innerHTML=history.map((h,i)=>`<div class="${i===history.length-1?'last':''}">${i+1}. ${h.text}</div>`).join('');
-  logEl.scrollTop=logEl.scrollHeight;
-
-  $('btnUndo').disabled=aiThinking||history.length===0||gameOver;
+    const ti=document.getElementById('turn-indicator');
+    const st=document.getElementById('game-status');
+    const ub=document.getElementById('btn-undo');
+    if(gameOver){ti.textContent='游戏结束';ti.className='';st.textContent='';return}
+    ti.textContent=curTurn==='red'?'● 红方走棋':'● 黑方走棋';
+    ti.className=curTurn==='red'?'turn-red':'turn-black';
+    if(aiThinking){st.textContent='AI 思考中…'}
+    else if(gameMode==='ai'&&curTurn===aiColor){st.textContent='AI 思考中…'}
+    else if(inCheckFlag){st.textContent='⚠ 将军！'}
+    else{st.textContent=''}
+    ub.disabled=hist.length===0||aiThinking||gameOver;
 }
 
-function cellFromEvent(ev){
-  const rect=canvas.getBoundingClientRect();
-  const scaleX=canvas.width/rect.width;
-  const scaleY=canvas.height/rect.height;
-  const clientX=ev.touches?ev.touches[0].clientX:ev.clientX;
-  const clientY=ev.touches?ev.touches[0].clientY:ev.clientY;
-  const mx=(clientX-rect.left)*scaleX;
-  const my=(clientY-rect.top)*scaleY;
-  const x=Math.round((mx-PAD_X)/CELL);
-  const y=Math.round((my-PAD_Y)/CELL);
-  if(!inBoard(x,y)) return null;
-  if(Math.abs(mx-px(x))>CELL*0.48||Math.abs(my-py(y))>CELL*0.48) return null;
-  return {x,y};
-}
+/* =========================================================
+   PIECE MOVEMENT RULES
+   ========================================================= */
+function own(p,isR){return isR?p>0:p<0}
+function inB(r,c){return r>=0&&r<=9&&c>=0&&c<=8}
+function inPal(r,c,isR){if(c<3||c>5)return false;return isR?(r>=7&&r<=9):(r>=0&&r<=2)}
 
-function handleBoardClick(ev){
-  if(gameOver||aiThinking||anim) return;
-  if(turn!==RED) return; // 人类只执红
-  const cell=cellFromEvent(ev);
-  if(!cell) return;
-  const {x,y}=cell;
-  const p=board[y][x];
-
-  if(selected){
-    const isTarget=legalTargets.some(t=>t.x===x&&t.y===y);
-    if(isTarget){
-      doMove(selected.x,selected.y,x,y,RED);
-      selected=null; legalTargets=[];
-      return;
+function genPieceMoves(bd,r,c){
+    const p=bd[r][c];if(p===0)return[];
+    const isR=p>0,tp=Math.abs(p),mv=[];
+    switch(tp){
+    case KING:{
+        for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]){
+            const nr=r+dr,nc=c+dc;
+            if(!inB(nr,nc)||!inPal(nr,nc,isR)||own(bd[nr][nc],isR))continue;
+            mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+        }break;}
+    case ADVISOR:{
+        for(const[dr,dc]of[[1,1],[1,-1],[-1,1],[-1,-1]]){
+            const nr=r+dr,nc=c+dc;
+            if(!inB(nr,nc)||!inPal(nr,nc,isR)||own(bd[nr][nc],isR))continue;
+            mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+        }break;}
+    case BISHOP:{
+        for(const[dr,dc]of[[2,2],[2,-2],[-2,2],[-2,-2]]){
+            const nr=r+dr,nc=c+dc;
+            if(!inB(nr,nc))continue;
+            if(isR&&nr<5)continue;if(!isR&&nr>4)continue;
+            if(bd[r+dr/2][c+dc/2]!==0)continue;
+            if(own(bd[nr][nc],isR))continue;
+            mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+        }break;}
+    case KNIGHT:{
+        const km=[[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],
+                   [-1,-2,0,-1],[-1,2,0,1],[1,-2,0,-1],[1,2,0,1]];
+        for(const[dr,dc,br,bc]of km){
+            const nr=r+dr,nc=c+dc;
+            if(!inB(nr,nc))continue;
+            if(bd[r+br][c+bc]!==0)continue;
+            if(own(bd[nr][nc],isR))continue;
+            mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+        }break;}
+    case ROOK:{
+        for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]){
+            let nr=r+dr,nc=c+dc;
+            while(inB(nr,nc)){
+                if(bd[nr][nc]===0){mv.push({fromR:r,fromC:c,toR:nr,toC:nc})}
+                else{if(!own(bd[nr][nc],isR))mv.push({fromR:r,fromC:c,toR:nr,toC:nc});break}
+                nr+=dr;nc+=dc;
+            }
+        }break;}
+    case CANNON:{
+        for(const[dr,dc]of[[0,1],[0,-1],[1,0],[-1,0]]){
+            let nr=r+dr,nc=c+dc,jumped=false;
+            while(inB(nr,nc)){
+                if(!jumped){
+                    if(bd[nr][nc]===0)mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+                    else jumped=true;
+                }else{
+                    if(bd[nr][nc]!==0){
+                        if(!own(bd[nr][nc],isR))mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
+                        break;
+                    }
+                }
+                nr+=dr;nc+=dc;
+            }
+        }break;}
+    case PAWN:{
+        if(isR){
+            const crossed=r<=4;
+            if(r-1>=0&&!own(bd[r-1][c],true))mv.push({fromR:r,fromC:c,toR:r-1,toC:c});
+            if(crossed){
+                if(c-1>=0&&!own(bd[r][c-1],true))mv.push({fromR:r,fromC:c,toR:r,toC:c-1});
+                if(c+1<=8&&!own(bd[r][c+1],true))mv.push({fromR:r,fromC:c,toR:r,toC:c+1});
+            }
+        }else{
+            const crossed=r>=5;
+            if(r+1<=9&&!own(bd[r+1][c],false))mv.push({fromR:r,fromC:c,toR:r+1,toC:c});
+            if(crossed){
+                if(c-1>=0&&!own(bd[r][c-1],false))mv.push({fromR:r,fromC:c,toR:r,toC:c-1});
+                if(c+1<=8&&!own(bd[r][c+1],false))mv.push({fromR:r,fromC:c,toR:r,toC:c+1});
+            }
+        }break;}
     }
-    if(p&&p.side===RED){
-      selected={x,y};
-      legalTargets=genLegalMoves(board,x,y,lastCheckerId);
-      statusLine.innerHTML=`已选中 <span class="hl">${PIECE_NAME[p.type][RED]}</span>`;
-      return;
+    return mv;
+}
+
+/* =========================================================
+   MOVE GENERATION & LEGALITY
+   ========================================================= */
+function genPseudo(bd,side){
+    const mv=[],isR=side==='red';
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const p=bd[r][c];if(p===0)continue;
+        if(isR&&p<0)continue;if(!isR&&p>0)continue;
+        mv.push(...genPieceMoves(bd,r,c));
     }
-    selected=null; legalTargets=[];
-    statusLine.textContent='请重新选择';
-    return;
-  }
-
-  if(p&&p.side===RED){
-    // 禁止用同一棋子连续将军：若该子就是 lastCheckerId，且走后仍将军，则过滤
-    selected={x,y};
-    legalTargets=genLegalMoves(board,x,y,lastCheckerId);
-    statusLine.innerHTML=`已选中 <span class="hl">${PIECE_NAME[p.type][RED]}</span> · 可走 ${legalTargets.length} 步`;
-  }
+    return mv;
 }
 
-canvas.addEventListener('click',handleBoardClick);
-canvas.addEventListener('touchstart',function(e){
-  e.preventDefault();
-  handleBoardClick(e);
-},{passive:false});
-
-/* ========== 行棋 ========== */
-function moveNotation(piece,fx,fy,tx,ty,captured){
-  const name=PIECE_NAME[piece.type][piece.side];
-  const file=n=>String(9-n); // 红方常用一二三…简化为数字
-  const fxS=String(fx+1), txS=String(tx+1);
-  const from=`${fx+1},${fy+1}`, to=`${tx+1},${ty+1}`;
-  return `${name} ${from}→${to}${captured?' ×'+PIECE_NAME[captured.type][captured.side]:''}`;
-}
-
-function doMove(fx,fy,tx,ty,side){
-  const piece=board[fy][fx];
-  if(!piece||piece.side!==side) return false;
-  const legal=genLegalMoves(board,fx,fy,lastCheckerId);
-  if(!legal.some(m=>m.x===tx&&m.y===ty)){
-    showToast(lastCheckerId&&piece.id===lastCheckerId?'不可用同一棋子连续将军':'非法落子');
+function isInCheck(bd,side){
+    const kp=side==='red'?KING:-KING;
+    let kr=-1,kc=-1;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)
+        if(bd[r][c]===kp){kr=r;kc=c}
+    if(kr===-1)return true;
+    const opp=side==='red'?'black':'red';
+    const om=genPseudo(bd,opp);
+    for(const m of om)if(m.toR===kr&&m.toC===kc)return true;
+    const ok=side==='red'?-KING:KING;
+    let or2=-1,oc2=-1;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)
+        if(bd[r][c]===ok){or2=r;oc2=c}
+    if(or2!==-1&&kc===oc2){
+        let blk=false;
+        const mn=Math.min(kr,or2),mx=Math.max(kr,or2);
+        for(let r=mn+1;r<mx;r++)if(bd[r][kc]!==0){blk=true;break}
+        if(!blk)return true;
+    }
     return false;
-  }
-  const captured=board[ty][tx];
-  if(captured){
-    if(captured.side===RED) capturedRed.push(captured);
-    else capturedBlack.push(captured);
-  }
+}
 
-  // 动画
-  const moving={...piece};
-  board[fy][fx]=null;
-  // 先不放终点，动画结束再放 —— 但评估需要终局。动画期间保持虚拟
-  const snapshotFrom={x:fx,y:fy};
-  anim={
-    from:snapshotFrom,
-    to:{x:tx,y:ty},
-    piece:moving,
-    t0:performance.now(),
-    dur:220,
-    captured,
-    after(){
-      board[ty][tx]=moving;
-      const opp=side===RED?BLACK:RED;
-      const gives=inCheck(board,opp);
-      if(gives) lastCheckerId=moving.id;
-      else lastCheckerId=null;
-
-      history.push({
-        from:{x:fx,y:fy},to:{x:tx,y:ty},
-        captured, piece:moving,
-        text:moveNotation(moving,fx,fy,tx,ty,captured)+(gives?' 将军！':'')
-      });
-
-      // 胜负
-      const oppKing=findKing(board,opp);
-      const oppMoves=genAllLegalMoves(board,opp,lastCheckerId);
-      if(!oppKing||oppMoves.length===0){
-        endGame(side, !oppKing?'将死':(inCheck(board,opp)?'将死':'困毙'));
-        return;
-      }
-      turn=opp;
-      updateUI();
-      statusLine.innerHTML = gives
-        ? `<span class="hl">${PIECE_NAME[moving.type][side]}</span> 将军！`
-        : '轮到'+(turn===RED?'你（红方）':'AI（黑方）');
-      if(turn===BLACK) scheduleAI();
+function getLegal(bd,side){
+    const pseudo=genPseudo(bd,side),legal=[];
+    for(const m of pseudo){
+        const cap=bd[m.toR][m.toC];
+        bd[m.toR][m.toC]=bd[m.fromR][m.fromC];
+        bd[m.fromR][m.fromC]=0;
+        if(!isInCheck(bd,side))legal.push(m);
+        bd[m.fromR][m.fromC]=bd[m.toR][m.toC];
+        bd[m.toR][m.toC]=cap;
     }
-  };
-  updateUI();
-  return true;
+    return legal;
 }
 
-function endGame(winner,reason){
-  gameOver=true;
-  aiThinking=false;
-  clearTimeout(aiTimer);
-  updateUI();
-  const title=$('resultTitle');
-  const sub=$('resultSub');
-  if(winner===RED){
-    title.textContent='红方胜';
-    sub.textContent='恭喜你，击败了AI！（'+reason+'）';
-  }else{
-    title.textContent='黑方胜';
-    sub.textContent='AI 获胜（'+reason+'）';
-  }
-  setTimeout(()=>$('resultOverlay').classList.remove('hide'),400);
-}
-
-/* ========== AI ========== */
-function scheduleAI(){
-  if(gameOver) return;
-  aiThinking=true;
-  updateUI();
-  statusLine.innerHTML='AI 思考中…';
-  clearTimeout(aiTimer);
-  const thinkMs=1800+Math.random()*500; // ~2s
-  aiTimer=setTimeout(()=>{
-    // 深度 4 + 迭代加深；时间预算略小于思考窗，保证动画衔接
-    const result=searchMove(board,BLACK,4,lastCheckerId, thinkMs-150);
-    aiThinking=false;
-    if(!result.move){
-      endGame(RED,'困毙');
-      return;
+/* =========================================================
+   AI ENGINE
+   ========================================================= */
+function evaluate(bd){
+    let sc=0,rk=false,bk=false;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const p=bd[r][c];if(p===0)continue;
+        const t=Math.abs(p);
+        if(p===KING)rk=true;if(p===-KING)bk=true;
+        let v=PVAL[t]||0;
+        if(t===PAWN){
+            if(p>0){if(r<=4)v+=50;if(r<=2)v+=25}
+            else{if(r>=5)v+=50;if(r>=7)v+=25}
+            if(c>=3&&c<=5)v+=15;
+        }
+        if(t===KNIGHT){v+=Math.max(0,14-Math.abs(c-4)*2-Math.abs(r-4.5)*2)}
+        if(t===ROOK)v+=10;
+        sc+=p>0?v:-v;
     }
-    const mv=result.move;
-    doMove(mv.fx,mv.fy,mv.tx,mv.ty,BLACK);
-  }, thinkMs);
+    if(!rk)return-999999;if(!bk)return 999999;
+    return sc;
 }
 
-/* ========== 新局 / 悔棋 / 提示 ========== */
-function newGame(){
-  idSeq=1;
-  board=makeBoard();
-  turn=RED;
-  selected=null;
-  legalTargets=[];
-  history=[];
-  capturedRed=[];
-  capturedBlack=[];
-  gameOver=false;
-  anim=null;
-  lastCheckerId=null;
-  aiThinking=false;
-  clearTimeout(aiTimer);
-  $('resultOverlay').classList.add('hide');
-  statusLine.textContent='你是红方，请先落子';
-  updateUI();
+function orderMv(bd,mvs){
+    return mvs.slice().sort((a,b)=>{
+        const va=bd[a.toR][a.toC]!==0?PVAL[Math.abs(bd[a.toR][a.toC])]:0;
+        const vb=bd[b.toR][b.toC]!==0?PVAL[Math.abs(bd[b.toR][b.toC])]:0;
+        return vb-va;
+    });
 }
 
-function undo(){
-  if(aiThinking||gameOver) return;
-  // 悔两步（若上一步是AI）
-  let steps=1;
-  if(history.length>=2 && turn===RED) steps=2;
-  if(history.length===0) return;
-  for(let i=0;i<steps;i++){
-    const h=history.pop();
-    if(!h) break;
-    board[h.from.y][h.from.x]=h.piece;
-    board[h.to.y][h.to.x]=h.captured||null;
-    if(h.captured){
-      const arr=h.captured.side===RED?capturedRed:capturedBlack;
-      // 移除最后一个匹配
-      for(let j=arr.length-1;j>=0;j--){
-        if(arr[j].id===h.captured.id){arr.splice(j,1);break;}
-      }
+function minimax(bd,depth,alpha,beta,maxi){
+    if(depth===0)return evaluate(bd);
+    const side=maxi?'red':'black';
+    let mvs=getLegal(bd,side);
+    if(mvs.length===0)return maxi?-99999+(3-depth):99999-(3-depth);
+    mvs=orderMv(bd,mvs);
+    if(maxi){
+        let best=-Infinity;
+        for(const m of mvs){
+            const cap=bd[m.toR][m.toC];
+            bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
+            const s=minimax(bd,depth-1,alpha,beta,false);
+            bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
+            if(s>best)best=s;if(s>alpha)alpha=s;if(beta<=alpha)break;
+        }
+        return best;
+    }else{
+        let best=Infinity;
+        for(const m of mvs){
+            const cap=bd[m.toR][m.toC];
+            bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
+            const s=minimax(bd,depth-1,alpha,beta,true);
+            bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
+            if(s<best)best=s;if(s<beta)beta=s;if(beta<=alpha)break;
+        }
+        return best;
     }
-    turn=h.piece.side;
-    // 重建 lastCheckerId：看新历史最后一步是否将军
-  }
-  // 重新计算 lastCheckerId
-  lastCheckerId=null;
-  if(history.length){
-    const last=history[history.length-1];
-    // 若上一步导致将军 —— 从文本判断
-    if(last.text.includes('将军')){
-      lastCheckerId=last.piece.id;
+}
+
+function findBest(){
+    const maxi=aiColor==='red';
+    let mvs=getLegal(board,aiColor);
+    if(mvs.length===0)return null;
+    mvs=orderMv(board,mvs);
+    let bestM=mvs[0],bestS=maxi?-Infinity:Infinity;
+    const depth=mvs.length>35?2:3;
+    for(const m of mvs){
+        const cap=board[m.toR][m.toC];
+        board[m.toR][m.toC]=board[m.fromR][m.fromC];board[m.fromR][m.fromC]=0;
+        const s=minimax(board,depth-1,-Infinity,Infinity,!maxi);
+        board[m.fromR][m.fromC]=board[m.toR][m.toC];board[m.toR][m.toC]=cap;
+        if(maxi?s>bestS:s<bestS){bestS=s;bestM=m}
     }
-  }
-  selected=null; legalTargets=[];
-  statusLine.textContent='已悔棋，请继续';
-  updateUI();
+    return bestM;
 }
 
-function hint(){
-  if(gameOver||aiThinking||anim||turn!==RED) return;
-  const r=searchMove(board,RED,3,lastCheckerId,1500);
-  if(!r.move){showToast('暂无可行招法');return;}
-  showToast(`提示：${PIECE_NAME[r.move.piece.type][RED]} ${r.move.fx+1},${r.move.fy+1} → ${r.move.tx+1},${r.move.ty+1}`);
-  selected={x:r.move.fx,y:r.move.fy};
-  legalTargets=genLegalMoves(board,r.move.fx,r.move.fy,lastCheckerId);
+/* =========================================================
+   GAME ACTIONS
+   ========================================================= */
+function doMove(mv){
+    const cap=board[mv.toR][mv.toC],pc=board[mv.fromR][mv.fromC];
+    hist.push({fromR:mv.fromR,fromC:mv.fromC,toR:mv.toR,toC:mv.toC,piece:pc,captured:cap});
+    board[mv.toR][mv.toC]=pc;board[mv.fromR][mv.fromC]=0;
+    lastMv={fromR:mv.fromR,fromC:mv.fromC,toR:mv.toR,toC:mv.toC};
+    curTurn=curTurn==='red'?'black':'red';
+    sel=null;validM=[];
+    inCheckFlag=isInCheck(board,curTurn);
+    render();checkEnd();
 }
 
-/* ========== 按钮 ========== */
-$('btnStart').onclick=()=>{
-  $('menuOverlay').classList.add('hide');
-  newGame();
-};
-$('btnRules').onclick=()=>{
-  $('rulesOverlay').classList.remove('hide');
-};
-$('btnRulesBack').onclick=()=>{
-  $('rulesOverlay').classList.add('hide');
-};
-$('btnNew').onclick=()=>{
-  if(history.length&&!confirm('确定开始新对局？')) return;
-  newGame();
-};
-$('btnUndo').onclick=undo;
-$('btnHint').onclick=hint;
-$('btnAgain').onclick=()=>{
-  $('resultOverlay').classList.add('hide');
-  newGame();
-};
-$('btnBackMenu').onclick=()=>{
-  $('resultOverlay').classList.add('hide');
-  $('menuOverlay').classList.remove('hide');
-};
+function checkEnd(){
+    if(gameOver)return;
+    const legal=getLegal(board,curTurn);
+    if(legal.length===0){
+        gameOver=true;
+        const w=curTurn==='red'?'黑方':'红方';
+        const msg=inCheckFlag?
+            (curTurn==='red'?'红':'黑')+'方被将杀！':
+            (curTurn==='red'?'红':'黑')+'方无子可动！';
+        showResult(w+'胜！',msg);render();return;
+    }
+    if(gameMode==='ai'&&curTurn===aiColor&&!gameOver){
+        aiThinking=true;render();
+        setTimeout(()=>{
+            const mv=findBest();
+            aiThinking=false;
+            if(mv)doMove(mv);
+        },150);
+    }
+}
 
-/* 初始化 */
-board=makeBoard();
-updateUI();
-requestAnimationFrame(render);
+/* =========================================================
+   EVENT HANDLING
+   ========================================================= */
+function onClick(e){
+    if(gameOver||aiThinking)return;
+    if(gameMode==='ai'&&curTurn===aiColor)return;
+    const rect=canvas.getBoundingClientRect();
+    const sx=CW/rect.width,sy=CH/rect.height;
+    const mx=(e.clientX-rect.left)*sx,my=(e.clientY-rect.top)*sy;
+    let col=Math.round((mx-PAD)/CELL),row=Math.round((my-PAD)/CELL);
+    if(!inB(row,col)){sel=null;validM=[];render();return}
 
-})();
+    if(sel){
+        const mv=validM.find(m=>m.toR===row&&m.toC===col);
+        if(mv){doMove(mv);return}
+    }
+    const piece=board[row][col];
+    if(piece!==0){
+        const isR=piece>0;
+        if((curTurn==='red'&&isR)||(curTurn==='black'&&!isR)){
+            sel={r:row,c:col};
+            const all=getLegal(board,curTurn);
+            validM=all.filter(m=>m.fromR===row&&m.fromC===col);
+            render();return;
+        }
+    }
+    sel=null;validM=[];render();
+}
+
+/* =========================================================
+   GAME FLOW
+   ========================================================= */
+function showMenu(){
+    document.getElementById('menu').classList.remove('hidden');
+    document.getElementById('ai-choice').classList.add('hidden');
+    document.getElementById('game').classList.add('hidden');
+    document.getElementById('game-over').classList.add('hidden');
+}
+function showAIChoice(){
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('ai-choice').classList.remove('hidden');
+}
+function startPvP(){gameMode='pvp';playerColor='red';aiColor=null;initGame()}
+function startAI(c){
+    gameMode='ai';playerColor=c;aiColor=c==='red'?'black':'red';initGame();
+}
+function initGame(){
+    board=initBoard();curTurn='red';sel=null;validM=[];
+    hist=[];gameOver=false;aiThinking=false;lastMv=null;
+    inCheckFlag=false;
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('ai-choice').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+    document.getElementById('game-over').classList.add('hidden');
+    render();
+    if(gameMode==='ai'&&aiColor==='red'){
+        aiThinking=true;render();
+        setTimeout(()=>{const mv=findBest();aiThinking=false;if(mv)doMove(mv)},250);
+    }
+}
+function restartGame(){document.getElementById('game-over').classList.add('hidden');initGame()}
+function backToMenu(){
+    gameOver=true;aiThinking=false;
+    document.getElementById('game-over').classList.add('hidden');
+    document.getElementById('game').classList.add('hidden');
+    showMenu();
+}
+function undoMove(){
+    if(gameOver||aiThinking||hist.length===0)return;
+    if(gameMode==='ai'){
+        if(hist.length<2)return;
+        for(let i=0;i<2;i++){
+            const m=hist.pop();
+            board[m.fromR][m.fromC]=m.piece;board[m.toR][m.toC]=m.captured;
+        }
+        curTurn=playerColor;
+    }else{
+        const m=hist.pop();
+        board[m.fromR][m.fromC]=m.piece;board[m.toR][m.toC]=m.captured;
+        curTurn=curTurn==='red'?'black':'red';
+    }
+    lastMv=hist.length>0?
+        {fromR:hist[hist.length-1].fromR,fromC:hist[hist.length-1].fromC,
+         toR:hist[hist.length-1].toR,toC:hist[hist.length-1].toC}:null;
+    sel=null;validM=[];
+    inCheckFlag=isInCheck(board,curTurn);
+    render();
+}
+function showResult(t,x){
+    document.getElementById('result-title').textContent=t;
+    document.getElementById('result-text').textContent=x;
+    document.getElementById('game-over').classList.remove('hidden');
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+window.addEventListener('DOMContentLoaded',()=>{
+    initCanvas();
+    canvas.addEventListener('click',onClick);
+    canvas.addEventListener('touchstart',function(e){e.preventDefault();},
+        {passive:false});
+    showMenu();
+});
 </script>
 </body>
 </html>
