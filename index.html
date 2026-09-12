@@ -630,14 +630,15 @@ function attacked(bd,kr,kc,byRed){
             r+=dr;c+=dc;
         }
     }
-    // 马
+    // 马：将位反推马位 (kr-dr, kc-dc)，蹩腿在马旁 (hr+br, hc+bc)
     const km=[[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],
                [-1,-2,0,-1],[-1,2,0,1],[1,-2,0,-1],[1,2,0,1]];
     for(const[dr,dc,br,bc]of km){
-        const r=kr+dr,c=kc+dc;
-        if(!inB(r,c))continue;
-        if(bd[r+br]&&bd[r+br][c+bc]!==0)continue;
-        const p=bd[r][c];
+        const hr=kr-dr,hc=kc-dc;
+        if(!inB(hr,hc))continue;
+        const lr=hr+br,lc=hc+bc;
+        if(!inB(lr,lc)||bd[lr][lc]!==0)continue;
+        const p=bd[hr][hc];
         if(p!==0&&Math.abs(p)===KNIGHT&&(p>0)===byRed)return true;
     }
     // 兵
