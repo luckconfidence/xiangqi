@@ -308,6 +308,7 @@ let lastMv=null,inCheckFlag=false;
 let anim=null;
 let canvas,ctx;
 let aiTimer=null;
+let lastTouchTs=0;
 
 /* =========================================================
    RENDERING
@@ -1002,26 +1003,29 @@ function boardPosFromEvent(e){
 
 function handleBoardInput(e){
     if(e.cancelable)e.preventDefault();
+    // 触摸后浏览器会再派发 click，避免连触发两次
+    if(e.type==='touchstart')lastTouchTs=Date.now();
+    if(e.type==='click'&&Date.now()-lastTouchTs<350)return;
     if(gameOver||aiThinking||anim)return;
     if(gameMode==='ai'&&curTurn===aiColor)return;
     const pos=boardPosFromEvent(e);
     if(!pos){sel=null;validM=[];render();return}
     const {row,col}=pos;
 
+    // 已选中棋子：点目标格则落子
     if(sel){
         const mv=validM.find(m=>m.toR===row&&m.toC===col);
         if(mv){doMove(mv);return}
     }
+    // 选中己方棋子
     const piece=board[row][col];
     if(piece!==0){
         const isR=piece>0;
         if((curTurn==='red'&&isR)||(curTurn==='black'&&!isR)){
-        if(sel){
             sel={r:row,c:col};
             const all=getLegal(board,curTurn,banFor(curTurn));
             validM=all.filter(m=>m.fromR===row&&m.fromC===col);
             render();return;
-        }
         }
     }
     sel=null;validM=[];render();
