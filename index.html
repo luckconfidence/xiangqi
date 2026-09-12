@@ -309,6 +309,7 @@ let anim=null;
 let canvas,ctx;
 let aiTimer=null;
 let lastTouchTs=0;
+let flipped=false; // 执黑时棋盘旋转，黑方在下
 
 /* =========================================================
    RENDERING
@@ -319,7 +320,7 @@ function initCanvas(){
     ctx=canvas.getContext('2d');
 }
 function cx(c){return PAD+c*CELL}
-function cy(r){return PAD+r*CELL}
+function cy(r){return PAD+(flipped?(9-r):r)*CELL}
 
 function showToast(msg){
     const el=document.getElementById('toast');
@@ -1067,6 +1068,7 @@ function boardPosFromEvent(e){
     const src=e.touches&&e.touches[0]?e.touches[0]:e;
     const mx=(src.clientX-rect.left)*sx,my=(src.clientY-rect.top)*sy;
     let col=Math.round((mx-PAD)/CELL),row=Math.round((my-PAD)/CELL);
+    if(flipped)row=9-row;
     if(!inB(row,col))return null;
     if(Math.abs(mx-cx(col))>CELL*0.48||Math.abs(my-cy(row))>CELL*0.48)return null;
     return {row,col};
@@ -1124,6 +1126,7 @@ function initGame(){
     board=initBoard();curTurn='red';sel=null;validM=[];
     hist=[];gameOver=false;aiThinking=false;lastMv=null;
     inCheckFlag=false;anim=null;
+    flipped=(gameMode==='ai'&&playerColor==='black');
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('ai-choice').classList.add('hidden');
     document.getElementById('game').classList.remove('hidden');
