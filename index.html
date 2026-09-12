@@ -531,9 +531,9 @@ function genPieceMoves(bd,r,c){
         const km=[[-2,-1,-1,0],[-2,1,-1,0],[2,-1,1,0],[2,1,1,0],
                    [-1,-2,0,-1],[-1,2,0,1],[1,-2,0,-1],[1,2,0,1]];
         for(const[dr,dc,br,bc]of km){
-            const nr=r+dr,nc=c+dc;
-            if(!inB(nr,nc))continue;
-            if(bd[r+br][c+bc]!==0)continue;
+            const nr=r+dr,nc=c+dc,lr=r+br,lc=c+bc;
+            if(!inB(nr,nc)||!inB(lr,lc))continue;
+            if(bd[lr][lc]!==0)continue;
             if(own(bd[nr][nc],isR))continue;
             mv.push({fromR:r,fromC:c,toR:nr,toC:nc});
         }break;}
@@ -834,8 +834,9 @@ const killers=Array.from({length:64},()=>[null,null]);
 const histHeur=Array.from({length:10},()=>Array.from({length:9},()=>Array.from({length:10},()=>Array(9).fill(0))));
 
 function moveKey(m){return m.fromR*1000+m.fromC*100+m.toR*10+m.toC}
-function posKey(bd,sideRed){
+function posKey(bd,sideRed,ban){
     let h=sideRed?1:0;
+    if(ban)h=(h*131+ban.r*10+ban.c)|0;
     for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)h=(h*31+bd[r][c]+8)|0;
     return h;
 }
@@ -863,18 +864,35 @@ const MATE=1e6;
 
 function quiescence(bd,sideRed,alpha,beta,t0,budget){
     if(performance.now()-t0>budget)return evaluate(bd)*(sideRed?1:-1);
-    let stand=evaluate(bd)*(sideRed?1:-1);
-    if(stand>=beta)return stand;
-    if(stand>alpha)alpha=stand;
     const side=sideRed?'red':'black';
-    const caps=genPseudo(bd,side).filter(m=>bd[m.toR][m.toC]!==0);
-    caps.sort((a,b)=>(PVAL[Math.abs(bd[b.toR][b.toC])]||0)-(PVAL[Math.abs(bd[a.toR][a.toC])]||0));
-    for(const m of caps.slice(0,16)){
+    const inChk=isInCheck(bd,side);
+    // 被将军时不能 stand-pat，必须找应将
+    if(!inChk){
+        const stand=evaluate(bd)*(sideRed?1:-1);
+        if(stand>=beta)return stand;
+        if(stand>alpha)alpha=stand;
+        const caps=genPseudo(bd,side).filter(m=>bd[m.toR][m.toC]!==0);
+        caps.sort((a,b)=>(PVAL[Math.abs(bd[b.toR][b.toC])]||0)-(PVAL[Math.abs(bd[a.toR][a.toC])]||0));
+        for(const m of caps.slice(0,16)){
+            const cap=bd[m.toR][m.toC];
+            bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
+            let sc;
+            if(!isInCheck(bd,side))sc=-quiescence(bd,!sideRed,-beta,-alpha,t0,budget);
+            else sc=-INF;
+            bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
+            if(sc>alpha)alpha=sc;
+            if(alpha>=beta)return beta;
+            if(performance.now()-t0>budget)break;
+        }
+        return alpha;
+    }
+    const mvs=getLegal(bd,side,null);
+    if(mvs.length===0)return -MATE+1;
+    mvs.sort((a,b)=>(PVAL[Math.abs(bd[b.toR][b.toC])]||0)-(PVAL[Math.abs(bd[a.toR][a.toC])]||0));
+    for(const m of mvs.slice(0,20)){
         const cap=bd[m.toR][m.toC];
         bd[m.toR][m.toC]=bd[m.fromR][m.fromC];bd[m.fromR][m.fromC]=0;
-        let sc;
-        if(!isInCheck(bd,side))sc=-quiescence(bd,!sideRed,-beta,-alpha,t0,budget);
-        else sc=-INF;
+        const sc=-quiescence(bd,!sideRed,-beta,-alpha,t0,budget);
         bd[m.fromR][m.fromC]=bd[m.toR][m.toC];bd[m.toR][m.toC]=cap;
         if(sc>alpha)alpha=sc;
         if(alpha>=beta)return beta;
@@ -889,7 +907,7 @@ function negamax(bd,depth,alpha,beta,sideRed,banFrom,t0,budget,ply,extLeft){
     if(depth<=0&&!inChk)return quiescence(bd,sideRed,alpha,beta,t0,budget);
     if(depth<=0)depth=1; // 被将军时至少再搜一层
 
-    const key=posKey(bd,sideRed);
+    const key=posKey(bd,sideRed,banFrom);
     const tt=TT.get(key);
     let ttMv=null;
     if(tt){
