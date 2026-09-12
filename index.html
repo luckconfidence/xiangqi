@@ -491,7 +491,7 @@ function updateUI(){
     }
     else if(inCheckFlag){st.textContent='⚠ 将军！'}
     else{st.textContent=''}
-    ub.disabled=hist.length===0||aiThinking||gameOver||!!anim;
+    ub.disabled=hist.length===0||gameOver||!!anim;
 }
 
 /* =========================================================
@@ -1162,11 +1162,22 @@ function backToMenu(){
     showMenu();
 }
 function undoMove(){
-    if(gameOver||aiThinking||anim||hist.length===0)return;
+    if(gameOver||anim)return;
+    // AI 思考中也可悔棋：取消定时器，退回玩家上一手
+    if(aiThinking){
+        clearTimeout(aiTimer);
+        aiThinking=false;
+    }
+    if(hist.length===0)return;
     if(gameMode==='ai'){
-        if(hist.length<2&&hist[0]&&hist[0].side===aiColor)return;
-        // 若只下了 AI 一步（玩家执黑），退这一步
-        if(hist.length===1&&hist[0].side===aiColor){
+        const last=hist[hist.length-1];
+        if(last&&last.side===playerColor){
+            // 玩家刚走、AI 未应手：只退这一步
+            const m=hist.pop();
+            board[m.fromR][m.fromC]=m.piece;board[m.toR][m.toC]=m.captured;
+            curTurn=playerColor;
+        }else if(hist.length===1&&last&&last.side===aiColor){
+            // 执黑开局只退 AI 先手
             const m=hist.pop();
             board[m.fromR][m.fromC]=m.piece;board[m.toR][m.toC]=m.captured;
             curTurn='red';
