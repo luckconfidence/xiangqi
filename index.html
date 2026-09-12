@@ -204,8 +204,9 @@ canvas.width=BW; canvas.height=BH;
 const RED=0, BLACK=1;
 const empty=()=>null;
 
-/* piece: {type, side, id} type: K A B N R C P  K帅/将 A仕/士 B相/象 N马 R车 C炮 P兵/卒 */
-const PIECE_VAL={K:10000,R:900,C:450,N:400,B:200,A:200,P:100};
+/* piece: {type, side, id} type: K A B N R C P
+ * 子力权重参考象棋中局谱：车最重，炮马次之，仕相防守子，过河兵升值 */
+const PIECE_VAL={K:20000,R:1200,C:520,N:480,B:210,A:210,P:100};
 const PIECE_NAME={
   K:{[RED]:'帅',[BLACK]:'将'},
   A:{[RED]:'仕',[BLACK]:'士'},
@@ -216,91 +217,91 @@ const PIECE_NAME={
   P:{[RED]:'兵',[BLACK]:'卒'}
 };
 
-/* 位置权重表（红方视角，y=0 红底线，y=9 黑底线） */
+/* 位置权重：红方视角 y=0 黑底线 → y=9 红底线；黑方走子前先镜像 y */
 const PST={
   P:[
     [0,0,0,0,0,0,0,0,0],
-    [90,90,110,120,120,120,110,90,90],
-    [90,90,110,120,120,120,110,90,90],
-    [90,90,110,125,130,125,110,90,90],
-    [90,110,130,140,150,140,130,110,90],
-    [90,110,130,145,155,145,130,110,90],
-    [90,110,130,140,150,140,130,110,90],
-    [80,90,100,110,110,110,100,90,80],
-    [50,60,70,80,80,80,70,60,50],
+    [15,25,35,40,40,40,35,25,15],
+    [10,20,30,40,45,40,30,20,10],
+    [10,18,28,35,40,35,28,18,10],
+    [8,15,22,30,32,30,22,15,8],
+    [5,10,15,20,22,20,15,10,5],
+    [0,3,6,10,12,10,6,3,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0]
   ],
   N:[
-    [40,50,60,60,60,60,60,50,40],
-    [50,70,80,80,80,80,80,70,50],
-    [60,80,100,100,100,100,100,80,60],
-    [60,80,100,110,110,110,100,80,60],
-    [60,80,100,110,120,110,100,80,60],
-    [60,80,100,110,120,110,100,80,60],
-    [60,80,100,110,110,110,100,80,60],
-    [60,80,100,100,100,100,100,80,60],
-    [50,70,80,80,80,80,80,70,50],
-    [30,50,60,60,60,60,60,50,30]
+    [4,8,12,12,10,12,12,8,4],
+    [8,16,22,20,18,20,22,16,8],
+    [12,20,30,28,30,28,30,20,12],
+    [12,22,32,36,34,36,32,22,12],
+    [10,20,30,36,40,36,30,20,10],
+    [10,20,30,36,40,36,30,20,10],
+    [8,16,28,32,34,32,28,16,8],
+    [6,14,22,26,28,26,22,14,6],
+    [4,10,16,18,20,18,16,10,4],
+    [0,4,8,8,8,8,8,4,0]
   ],
   R:[
-    [100,100,100,110,120,110,100,100,100],
-    [100,110,110,120,130,120,110,110,100],
-    [90,100,100,110,120,110,100,100,90],
-    [90,100,110,120,130,120,110,100,90],
-    [90,100,110,120,130,120,110,100,90],
-    [90,100,110,120,130,120,110,100,90],
-    [90,100,100,110,120,110,100,100,90],
-    [80,90,90,100,110,100,90,90,80],
-    [70,80,90,100,110,100,90,80,70],
-    [60,70,80,90,100,90,80,70,60]
+    [6,8,10,12,14,12,10,8,6],
+    [10,14,16,18,20,18,16,14,10],
+    [8,12,14,18,22,18,14,12,8],
+    [8,12,16,20,24,20,16,12,8],
+    [8,12,16,20,24,20,16,12,8],
+    [8,12,16,20,24,20,16,12,8],
+    [8,12,14,18,22,18,14,12,8],
+    [6,10,12,14,16,14,12,10,6],
+    [4,8,10,12,14,12,10,8,4],
+    [2,6,8,10,12,10,8,6,2]
   ],
   C:[
-    [80,80,80,90,100,90,80,80,80],
-    [80,90,90,100,110,100,90,90,80],
-    [70,80,80,90,100,90,80,80,70],
-    [70,80,90,100,110,100,90,80,70],
-    [70,80,90,100,110,100,90,80,70],
-    [70,80,90,100,110,100,90,80,70],
-    [70,80,80,90,100,90,80,80,70],
-    [60,70,70,80,90,80,70,70,60],
-    [50,60,60,70,80,70,60,60,50],
-    [40,50,50,60,70,60,50,50,40]
+    [6,8,10,14,16,14,10,8,6],
+    [8,12,14,18,20,18,14,12,8],
+    [6,10,14,18,22,18,14,10,6],
+    [6,10,16,20,24,20,16,10,6],
+    [4,8,14,20,24,20,14,8,4],
+    [4,8,14,20,24,20,14,8,4],
+    [6,10,16,20,24,20,16,10,6],
+    [6,10,14,18,22,18,14,10,6],
+    [4,8,10,14,16,14,10,8,4],
+    [0,4,6,8,10,8,6,4,0]
   ],
   B:[
-    [0,0,20,0,0,0,20,0,0],
+    [0,0,4,0,6,0,4,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,4,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,4,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0],
-    [0,0,20,0,0,0,20,0,0]
+    [0,0,4,0,6,0,4,0,0]
   ],
   A:[
     [0,0,0,0,0,0,0,0,0],
-    [0,0,0,20,0,20,0,0,0],
-    [0,0,0,0,30,0,0,0,0],
+    [0,0,0,6,0,6,0,0,0],
+    [0,0,0,0,10,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,30,0,0,0,0],
-    [0,0,0,20,0,20,0,0,0],
+    [0,0,0,0,10,0,0,0,0],
+    [0,0,0,6,0,6,0,0,0],
     [0,0,0,0,0,0,0,0,0]
   ],
   K:[
-    [0,0,0,0,20,0,0,0,0],
-    [0,0,0,0,20,0,0,0,0],
-    [0,0,0,0,10,0,0,0,0],
+    [0,0,0,0,8,0,0,0,0],
+    [0,0,0,0,6,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
     [0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,10,0,0,0,0],
-    [0,0,0,0,20,0,0,0,0],
-    [0,0,0,0,20,0,0,0,0]
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0],
+    [0,0,0,0,6,0,0,0,0],
+    [0,0,0,0,8,0,0,0,0]
   ]
 };
 
@@ -547,109 +548,228 @@ function genAllLegalMoves(b,side,banCheckerId){
   return out;
 }
 
-/* ========== 评估（权重计算公式） ==========
- * score = Σ(子力价值 + 位置权重 + 过河加成) + 机动性×2
- * 子力：K10000 R900 C450 N400 B200 A200 P100
- * 另有单步权重：吃子×1.2 + 位置×0.3 + 中心控制15
+/* ========== 评估（权重公式 + 攻防策略） ==========
+ *
+ * score(红视角) = 子力Σ + 位置Σ + 机动性 + 进攻 + 防守 + 王安全 + 威胁
+ *
+ * 进攻策略：
+ *   · 车占肋道/兵行线/对方九宫线，可多向控盘
+ *   · 马过河挂角、卧槽（靠近对方将）
+ *   · 炮沉底/有架瞄准九宫
+ *   · 过河兵（尤其高兵、低兵）升值，可侧击
+ *   · 子力集中攻击对方九宫附近
+ * 防守策略：
+ *   · 仕相在位护宫，缺仕/缺相罚分
+ *   · 将帅受攻击子数越多罚分越大
+ *   · 悬空子（被吃且不被保护）重罚，反捉轻赏
+ *   · 防止车炮沉底线无根
  */
+function isInPalace(x,y,side){
+  if(x<3||x>5) return false;
+  return side===RED ? (y>=7&&y<=9) : (y>=0&&y<=2);
+}
+
+function pawnValue(side,x,y){
+  // 过河后随推进升值；到底线成老兵略降但仍强于未过河
+  if(side===RED){
+    if(y>4) return PIECE_VAL.P;
+    if(y===4) return 130;
+    if(y===3) return 170;
+    if(y===2) return 220;
+    if(y===1) return 260;
+    return 200; // 底线老兵
+  }else{
+    if(y<5) return PIECE_VAL.P;
+    if(y===5) return 130;
+    if(y===6) return 170;
+    if(y===7) return 220;
+    if(y===8) return 260;
+    return 200;
+  }
+}
+
+function countAttackersTo(b,tx,ty,bySide){
+  let n=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const p=b[y][x];
+    if(!p||p.side!==bySide) continue;
+    if(x===tx&&y===ty) continue; // 不把自己算成攻击者
+    if(p.type==='R'||p.type==='C'){
+      const dx=Math.sign(tx-x), dy=Math.sign(ty-y);
+      if(!(dx===0||dy===0)) continue;
+      if(dx===0&&dy===0) continue;
+      let nx=x+dx, ny=y+dy, screens=0;
+      while(inBoard(nx,ny)){
+        if(nx===tx&&ny===ty){
+          if(p.type==='R'&&screens===0) n++;
+          if(p.type==='C'&&screens===1) n++;
+          break;
+        }
+        if(b[ny][nx]) screens++;
+        if(screens>1) break;
+        nx+=dx; ny+=dy;
+      }
+    }else if(p.type==='N'){
+      const steps=[[1,2,0,1],[-1,2,0,1],[1,-2,0,-1],[-1,-2,0,-1],[2,1,1,0],[2,-1,1,0],[-2,1,-1,0],[-2,-1,-1,0]];
+      for(const [sx,sy,lx,ly] of steps){
+        if(x+sx===tx&&y+sy===ty){
+          if(!(b[y+ly]&&b[y+ly][x+lx])){ n++; break; }
+        }
+      }
+    }else if(p.type==='P'){
+      const fwd=bySide===RED?-1:1;
+      if(x===tx&&y+fwd===ty) n++;
+      else if(y===ty&&Math.abs(x-tx)===1){
+        const crossed=bySide===RED?(y<=4):(y>=5);
+        if(crossed) n++;
+      }
+    }else if(p.type==='K'){
+      if(palaceOk(bySide,tx,ty)&&Math.abs(x-tx)+Math.abs(y-ty)===1) n++;
+    }else if(p.type==='A'){
+      if(palaceOk(bySide,tx,ty)&&Math.abs(x-tx)===1&&Math.abs(y-ty)===1) n++;
+    }else if(p.type==='B'){
+      if(Math.abs(x-tx)===2&&Math.abs(y-ty)===2){
+        if(bySide===RED&&ty<5) continue;
+        if(bySide===BLACK&&ty>4) continue;
+        const ex=(x+tx)/2, ey=(y+ty)/2;
+        if(!(b[ey]&&b[ey][ex])) n++;
+      }
+    }
+  }
+  return n;
+}
+
+function pieceStaticScore(p,x,y){
+  // 仅位置分，不含子力底价
+  const pst=PST[p.type];
+  const pstY=p.side===RED?y:(ROWS-1-y);
+  return pst[pstY][x]||0;
+}
+
 function evaluate(b){
-  // 从红方视角，正数利于红
-  let score=0;
+  let score=0; // 红方视角
+  let redR=0, blackR=0, redC=0, blackC=0, redN=0, blackN=0;
+  let redAdv=0, blackAdv=0;
+  let redA=0, blackA=0, redB=0, blackB=0;
+  let redMater=0, blackMater=0;
+  const redHeavy=[], blackHeavy=[];
+
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const p=b[y][x];
     if(!p) continue;
-    let v=PIECE_VAL[p.type];
-    const pst=PST[p.type];
-    // 黑方镜像 y
-    const pstY = p.side===RED ? y : (ROWS-1-y);
-    const pos = pst[pstY][x]||0;
-    v += pos;
-    // 过河兵加分
-    if(p.type==='P'){
-      if(p.side===RED&&y<=4) v+=30;
-      if(p.side===BLACK&&y>=5) v+=30;
+    let v=p.type==='P' ? pawnValue(p.side,x,y) : PIECE_VAL[p.type];
+    v+=pieceStaticScore(p,x,y);
+    if(p.side===RED){
+      redMater+=v;
+      if(p.type==='R'){redR++; redHeavy.push({x,y,type:p.type});}
+      if(p.type==='C'){redC++; redHeavy.push({x,y,type:p.type});}
+      if(p.type==='N'){redN++; redHeavy.push({x,y,type:p.type});}
+      if(p.type==='P'&&y<=4) redAdv++;
+      if(p.type==='A') redA++;
+      if(p.type==='B') redB++;
+    }else{
+      blackMater+=v;
+      if(p.type==='R'){blackR++; blackHeavy.push({x,y,type:p.type});}
+      if(p.type==='C'){blackC++; blackHeavy.push({x,y,type:p.type});}
+      if(p.type==='N'){blackN++; blackHeavy.push({x,y,type:p.type});}
+      if(p.type==='P'&&y>=5) blackAdv++;
+      if(p.type==='A') blackA++;
+      if(p.type==='B') blackB++;
     }
-    score += p.side===RED ? v : -v;
   }
-  // 机动性
-  const redMob=genAllLegalMoves(b,RED,null).length;
-  const blackMob=genAllLegalMoves(b,BLACK,null).length;
-  score += (redMob-blackMob)*2;
+  score += redMater - blackMater;
+
+  function attackBonus(side, heavies, advPawns, n){
+    let s=0;
+    const kx=4, ky=side===RED?1:8;
+    for(const h of heavies){
+      const dist=Math.abs(h.x-kx)+Math.abs(h.y-ky);
+      s += Math.max(0,(8-dist))*4;
+      if(h.type==='R'){
+        if(h.x===3||h.x===5) s+=12;
+        if(h.x===4) s+=10;
+        if(side===RED&&h.y<=2) s+=16;
+        if(side===BLACK&&h.y>=7) s+=16;
+      }
+      if(h.type==='C'){
+        if(h.x===4) s+=8;
+        if(side===RED&&h.y<=4) s+=10;
+        if(side===BLACK&&h.y>=5) s+=10;
+      }
+      if(h.type==='N'){
+        if(side===RED&&h.y<=4) s+=14;
+        if(side===BLACK&&h.y>=5) s+=14;
+        if(side===RED&&h.y<=2&&(h.x<=1||h.x>=7||h.x===3||h.x===5)) s+=18;
+        if(side===BLACK&&h.y>=7&&(h.x<=1||h.x>=7||h.x===3||h.x===5)) s+=18;
+      }
+    }
+    s += advPawns*22;
+    s += n*3;
+    return s;
+  }
+
+  score += attackBonus(RED, redHeavy, redAdv, redR+redC+redN);
+  score -= attackBonus(BLACK, blackHeavy, blackAdv, blackR+blackC+blackN);
+
+  function defenseBonus(aCount,bCount){
+    let s=0;
+    s += aCount===2?35:aCount*12;
+    s += bCount===2?28:bCount*10;
+    if(aCount<2) s-=(2-aCount)*20;
+    if(bCount<2) s-=(2-bCount)*16;
+    return s;
+  }
+  score += defenseBonus(redA,redB);
+  score -= defenseBonus(blackA,blackB);
+
+  const rk=findKing(b,RED), bk=findKing(b,BLACK);
+  if(rk){
+    const atk=countAttackersTo(b,rk.x,rk.y,BLACK);
+    score -= atk*atk*45 + atk*30;
+    if(redA===0) score-=40;
+  }
+  if(bk){
+    const atk=countAttackersTo(b,bk.x,bk.y,RED);
+    score += atk*atk*45 + atk*30;
+    if(blackA===0) score+=40;
+  }
+
+  function hangingPenalty(side){
+    let pen=0;
+    const enemy=side===RED?BLACK:RED;
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+      const p=b[y][x];
+      if(!p||p.side!==side) continue;
+      if(p.type==='K'||p.type==='A') continue;
+      const atk=countAttackersTo(b,x,y,enemy);
+      if(atk===0) continue;
+      const def=countAttackersTo(b,x,y,side);
+      const pv=p.type==='P'?pawnValue(side,x,y):PIECE_VAL[p.type];
+      if(def===0) pen += pv*0.85 + (p.type==='R'?80:0) + ((p.type==='N'||p.type==='C')?40:0);
+      else if(def<atk) pen += pv*0.35;
+    }
+    return pen;
+  }
+  score -= hangingPenalty(RED);
+  score += hangingPenalty(BLACK);
+
+  score += (estimateMobility(b,RED)-estimateMobility(b,BLACK))*1.2;
   return score;
 }
 
-function moveScoreWeight(move){
-  // 单步权重：吃子子力 + 目标位置 + 中心控制
-  let w=0;
-  if(move.capture&&move.captured){
-    w += PIECE_VAL[move.captured.type]*1.2;
-    w -= PIECE_VAL[move.piece.type]*0.05;
+function estimateMobility(b,side){
+  let m=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const p=b[y][x];
+    if(!p||p.side!==side) continue;
+    const ms=genRawMoves(b,x,y,false);
+    m+=ms.length;
+    // 大子机动价值更高
+    if(p.type==='R') m+=ms.length*0.8;
+    if(p.type==='N') m+=ms.length*0.5;
+    if(p.type==='C') m+=ms.length*0.4;
   }
-  const pst=PST[move.piece.type];
-  const pstY=move.piece.side===RED?move.ty:(ROWS-1-move.ty);
-  w += (pst[pstY][move.tx]||0)*0.3;
-  if(move.tx>=3&&move.tx<=5) w+=15;
-  return w;
-}
-
-/* minimax with alpha-beta, depth limited, weight-aware ordering */
-function searchMove(b, side, depth, banCheckerId, timeBudget){
-  const t0=performance.now();
-  const maximizing = side===RED;
-  let best=null, bestScore=maximizing?-1e9:1e9;
-  let nodes=0;
-
-  const moves=orderMoves(genAllLegalMoves(b,side,banCheckerId), maximizing);
-
-  function negamax(boardState, d, alpha, beta, sd, banId){
-    nodes++;
-    if(performance.now()-t0>timeBudget) return evalFor(boardState,sd);
-    if(d===0) return evalFor(boardState,sd);
-    const ms=orderMoves(genAllLegalMoves(boardState,sd,banId), true);
-    if(ms.length===0){
-      if(inCheck(boardState,sd)) return -100000 - d;
-      return 0;
-    }
-    let value=-1e9;
-    for(const mv of ms){
-      const nb=cloneBoard(boardState);
-      const moving=nb[mv.fy][mv.fx];
-      const captured=nb[mv.ty][mv.tx];
-      nb[mv.ty][mv.tx]=moving;
-      nb[mv.fy][mv.fx]=null;
-      const opp=sd===RED?BLACK:RED;
-      const gives=inCheck(nb,opp);
-      const newBan=gives?moving.id:null;
-      const score=-negamax(nb, d-1, -beta, -alpha, opp, newBan);
-      if(score>value) value=score;
-      if(value>alpha) alpha=value;
-      if(alpha>=beta) break;
-      if(performance.now()-t0>timeBudget) break;
-    }
-    return value;
-  }
-
-  for(const mv of moves){
-    const nb=cloneBoard(b);
-    const moving=nb[mv.fy][mv.fx];
-    nb[mv.ty][mv.tx]=moving;
-    nb[mv.fy][mv.fx]=null;
-    const opp=side===RED?BLACK:RED;
-    const gives=inCheck(nb,opp);
-    const newBan=gives?moving.id:null;
-    let sc;
-    if(depth<=1){
-      sc=evalFor(nb,opp);
-      if(gives) sc += 50;
-    }else{
-      sc=-negamax(nb,depth-1,-1e9,1e9,opp,newBan);
-    }
-    if((maximizing&&sc>bestScore)||(!maximizing&&sc<bestScore)){
-      bestScore=sc; best=mv;
-    }
-    if(performance.now()-t0>timeBudget) break;
-  }
-  return {move:best,score:bestScore,nodes};
+  return m;
 }
 
 function evalFor(b, side){
@@ -657,12 +777,146 @@ function evalFor(b, side){
   return side===RED ? e : -e;
 }
 
-function orderMoves(moves){
-  return moves.slice().sort((a,b)=>{
-    const wa=moveScoreWeight({capture:a.capture,piece:a.piece,tx:a.tx,ty:a.ty,captured:a.captured});
-    const wb=moveScoreWeight({capture:b.capture,piece:b.piece,tx:b.tx,ty:b.ty,captured:b.captured});
-    return wb-wa;
+/* MVV-LVA + 位置：吃子优先，再考虑升值/进攻 */
+function moveScoreWeight(b,mv){
+  const mover=b[mv.fy][mv.fx];
+  if(!mover) return 0;
+  let w=0;
+  if(mv.capture){
+    const victim=b[mv.ty][mv.tx];
+    if(victim){
+      const vv=victim.type==='P'?pawnValue(victim.side,mv.tx,mv.ty):PIECE_VAL[victim.type];
+      const av=PIECE_VAL[mover.type]||100;
+      w += vv*10 - av*0.5; // MVV-LVA
+    }
+  }
+  w += pieceStaticScore(mover,mv.tx,mv.ty)*0.8;
+  if(mover.type==='P') w+=20;
+  if(mover.type==='R'&&(mv.tx===3||mv.tx===5||mv.tx===4)) w+=15;
+  if(mover.type==='N'){
+    if(mover.side===RED&&mv.ty<=4) w+=25;
+    if(mover.side===BLACK&&mv.ty>=5) w+=25;
+  }
+  // 吃无根大子额外加分
+  if(mv.capture){
+    const victim=b[mv.ty][mv.tx];
+    if(victim&&victim.type!=='P'){
+      const def=countAttackersTo(b,mv.ty,mv.tx,mover.side);
+      // def 在吃子前算保护，这里近似
+      if(def<=1) w+=PIECE_VAL[victim.type]*2;
+    }
+  }
+  return w;
+}
+
+function orderMoves(b,moves){
+  return moves.slice().sort((a,c)=>moveScoreWeight(b,c)-moveScoreWeight(b,a));
+}
+
+/* ========== 搜索：迭代加深 + αβ + 静止搜索 ========== */
+const INF=1e9;
+
+function makeMove(b,mv){
+  const nb=cloneBoard(b);
+  nb[mv.ty][mv.tx]=nb[mv.fy][mv.fx];
+  nb[mv.fy][mv.fx]=null;
+  return nb;
+}
+
+function quiescence(b,side,alpha,beta,t0,budget){
+  if(performance.now()-t0>budget) return evalFor(b,side);
+  const stand=evalFor(b,side);
+  if(side===RED){
+    if(stand>=beta) return stand;
+    if(stand>alpha) alpha=stand;
+  }else{
+    if(stand<=alpha) return stand;
+    if(stand<beta) beta=stand;
+  }
+  const caps=[];
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const p=b[y][x];
+    if(!p||p.side!==side) continue;
+    const ms=genRawMoves(b,x,y,false);
+    for(const m of ms){
+      if(!m.capture) continue;
+      caps.push({fx:x,fy:y,tx:m.x,ty:m.y,capture:true,piece:p});
+    }
+  }
+  caps.sort((a,c)=>{
+    const va=b[a.ty][a.tx], vc=b[c.ty][c.tx];
+    return (vc?PIECE_VAL[vc.type]:0)-(va?PIECE_VAL[va.type]:0);
   });
+  for(const mv of caps.slice(0,14)){
+    const nb=makeMove(b,mv);
+    if(inCheck(nb,side)) continue;
+    const opp=side===RED?BLACK:RED;
+    const sc=-quiescence(nb,opp,-beta,-alpha,t0,budget);
+    if(side===RED){
+      if(sc>alpha) alpha=sc;
+      if(alpha>=beta) return alpha;
+    }else{
+      if(sc<beta) beta=sc;
+      if(beta<=alpha) return beta;
+    }
+    if(performance.now()-t0>budget) break;
+  }
+  return side===RED?alpha:beta;
+}
+
+function negamaxSearch(b,d,alpha,beta,side,banId,t0,budget,ply){
+  if(performance.now()-t0>budget) return evalFor(b,side);
+  if(d<=0) return quiescence(b,side,alpha,beta,t0,budget);
+
+  const moves=orderMoves(b,genAllLegalMoves(b,side,banId));
+  if(moves.length===0){
+    if(inCheck(b,side)) return -INF+ply;
+    return 0;
+  }
+
+  let best=-INF;
+  for(const mv of moves){
+    const nb=makeMove(b,mv);
+    const opp=side===RED?BLACK:RED;
+    const gives=inCheck(nb,opp);
+    const newBan=gives?mv.piece.id:null;
+    const ext=gives?1:0;
+    const sc=-negamaxSearch(nb, d-1+ext, -beta, -alpha, opp, newBan, t0, budget, ply+1);
+    if(sc>best) best=sc;
+    if(best>alpha) alpha=best;
+    if(alpha>=beta) break;
+    if(performance.now()-t0>budget) break;
+  }
+  return best;
+}
+
+function searchMove(b, side, depth, banCheckerId, timeBudget){
+  const t0=performance.now();
+  let best=null;
+  let bestScore=-INF;
+  const legal=genAllLegalMoves(b,side,banCheckerId);
+  if(!legal.length) return {move:null,score:0,nodes:0};
+
+  for(let d=1; d<=depth; d++){
+    const ordered=orderMoves(b,legal);
+    let alpha=-INF, localBest=null, localScore=-INF;
+    let broke=false;
+    for(const mv of ordered){
+      const nb=makeMove(b,mv);
+      const opp=side===RED?BLACK:RED;
+      const gives=inCheck(nb,opp);
+      const newBan=gives?mv.piece.id:null;
+      const ext=gives?1:0;
+      const sc=-negamaxSearch(nb, d-1+ext, -INF, -alpha, opp, newBan, t0, timeBudget, 1);
+      if(sc>localScore){ localScore=sc; localBest=mv; }
+      if(sc>alpha) alpha=sc;
+      if(performance.now()-t0>timeBudget){ broke=true; break; }
+    }
+    if(localBest){ best=localBest; bestScore=localScore; }
+    if(broke) break;
+    if(localScore>INF-200) break;
+  }
+  return {move:best,score:bestScore,nodes:0};
 }
 
 /* ========== 绘制 ========== */
@@ -1087,9 +1341,10 @@ function scheduleAI(){
   updateUI();
   statusLine.innerHTML='AI 思考中…';
   clearTimeout(aiTimer);
-  const thinkMs=1800+Math.random()*600; // ~2s
+  const thinkMs=1800+Math.random()*500; // ~2s
   aiTimer=setTimeout(()=>{
-    const result=searchMove(board,BLACK,3,lastCheckerId, thinkMs-200);
+    // 深度 4 + 迭代加深；时间预算略小于思考窗，保证动画衔接
+    const result=searchMove(board,BLACK,4,lastCheckerId, thinkMs-150);
     aiThinking=false;
     if(!result.move){
       endGame(RED,'困毙');
